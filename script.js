@@ -225,13 +225,29 @@ const CORS_PROXIES = [
 ];
 
 async function fetchTextViaProxies(url) {
+  // Try a direct, proxy-free request first. Public "weekly export" data
+  // files like FairEconomy's are often served with open CORS headers
+  // specifically so third-party tools can read them directly — and a
+  // direct request avoids a real problem with proxies here: ForexFactory
+  // is known to actively block requests coming from VPS/cloud IP ranges
+  // via Cloudflare, which is exactly what public CORS proxies run on.
+  try {
+    const res = await fetch(url);
+    if (res.ok) {
+      const text = await res.text();
+      if (looksLikeRealData(text)) return text;
+    }
+  } catch (err) {
+    // CORS-blocked or network error — fall through to the proxy chain.
+  }
+
   let lastError = null;
   for (const buildProxyUrl of CORS_PROXIES) {
     try {
       const res = await fetch(buildProxyUrl(url));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const text = await res.text();
-      if (!text || text.length < 5) throw new Error("leere Antwort");
+      if (!looksLikeRealData(text)) throw new Error("Antwort sieht nicht nach Daten aus (evtl. Cloudflare-Block)");
       return text;
     } catch (err) {
       lastError = err;
@@ -239,6 +255,16 @@ async function fetchTextViaProxies(url) {
     }
   }
   throw lastError || new Error("Alle Proxys fehlgeschlagen");
+}
+
+function looksLikeRealData(text) {
+  if (!text || text.length < 5) return false;
+  const head = text.trim().slice(0, 100).toLowerCase();
+  // Reject HTML error/challenge pages (Cloudflare blocks, proxy error
+  // pages, "Request Denied" rate-limit pages) that come back as 200 OK
+  // but aren't the JSON/XML/RSS we asked for.
+  if (head.startsWith("<!doctype") || head.startsWith("<html")) return false;
+  return true;
 }
 
 /* ---------------------------------------------------------------------
@@ -258,9 +284,9 @@ async function fetchTextViaProxies(url) {
    --------------------------------------------------------------------- */
 const NEWS_CONFIG = {
   feeds: [
-    "https://www.cnbc.com/id/15838459/device/rss/rss.html", // CNBC Markets
-    "https://www.cnbc.com/id/19794221/device/rss/rss.html", // CNBC Investing
-    "https://cointelegraph.com/rss"                          // Crypto news
+    { url: "https://www.cnbc.com/id/15838459/device/rss/rss.html", source: "CNBC" }, // CNBC Markets
+    { url: "https://www.cnbc.com/id/19794221/device/rss/rss.html", source: "CNBC" }, // CNBC Investing
+    { url: "https://cointelegraph.com/rss", source: "CoinTelegraph" }                 // Crypto news
   ],
   // Headline must contain at least one of these (case-insensitive) to be
   // considered "important" — add/remove freely.
@@ -296,9 +322,9 @@ function parseRssItems(xmlText, fallbackSource) {
   }).filter((it) => it.title);
 }
 
-async function fetchNewsFeed(url) {
-  const text = await fetchTextViaProxies(url);
-  return parseRssItems(text, "News");
+async function fetchNewsFeed(feed) {
+  const text = await fetchTextViaProxies(feed.url);
+  return parseRssItems(text, feed.source);
 }
 
 function isImportantHeadline(title) {
@@ -410,8 +436,8 @@ async function fetchForexFactoryEvents() {
   const results = await Promise.allSettled(CALENDAR_CONFIG.ffUrls.map(fetchTextViaProxies));
   const all = [];
   for (const r of results) {
-    if (r.status !== "fulfilled") continue;
-    try { all.push(...JSON.parse(r.value)); } catch (e) { /* skip malformed week */ }
+    if (r.status !== "fulfilled") { console.warn("FF-Feed nicht erreichbar:", r.reason?.message); continue; }
+    try { all.push(...JSON.parse(r.value)); } catch (e) { console.warn("FF-Feed: unerwartete Antwort (kein JSON):", e.message); }
   }
   return all
     .filter((e) => CALENDAR_CONFIG.fxCountries.includes(e.country))
@@ -442,9 +468,9 @@ async function fetchCryptoCraftEvents() {
   const results = await Promise.allSettled(CALENDAR_CONFIG.ccUrls.map(fetchTextViaProxies));
   const all = [];
   for (const r of results) {
-    if (r.status !== "fulfilled") continue;
+    if (r.status !== "fulfilled") { console.warn("CC-Feed nicht erreichbar:", r.reason?.message); continue; }
     const doc = new DOMParser().parseFromString(r.value, "text/xml");
-    if (doc.querySelector("parsererror")) continue;
+    if (doc.querySelector("parsererror")) { console.warn("CC-Feed: unerwartete Antwort (kein XML)"); continue; }
     all.push(...Array.from(doc.querySelectorAll("event")));
   }
   return all.map((ev) => {
@@ -467,6 +493,7 @@ async function refreshEventsCalendar() {
     if (ffEvents.length === 0 && ccEvents.length === 0) {
       throw new Error("Beide Kalender-Feeds nicht erreichbar");
     }
+    console.info("Events: FF=" + ffEvents.length + " CC=" + ccEvents.length + " Rohtreffer");
 
     // Match by normalized title + same UTC calendar day.
     const dayKey = (utc) => new Date(utc).toISOString().slice(0, 10);
@@ -499,6 +526,8 @@ async function refreshEventsCalendar() {
 
     eventsState.items = merged.filter((e) => e.fx >= 2 || e.crypto >= 2);
     eventsState.usingFallback = false;
+    console.info("Events: " + eventsState.items.length + " nach Filter, " +
+      eventsState.items.filter((e) => e.utc > Date.now()).length + " davon in der Zukunft");
   } catch (err) {
     console.warn("Events-Kalender: Live-Feeds nicht verfügbar, nutze Fallback-Liste.", err.message);
     eventsState.items = FALLBACK_EVENTS;
