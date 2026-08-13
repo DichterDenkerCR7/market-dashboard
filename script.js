@@ -72,8 +72,14 @@ const CONFIG = {
    thousands of trading tools for years) — free, keyless, no login.
    --------------------------------------------------------------------- */
 const CALENDAR_CONFIG = {
-  ffUrl: "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
-  ccUrl: "https://nfs.faireconomy.media/cc_calendar_thisweek.xml",
+  ffUrls: [
+    "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+    "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
+  ],
+  ccUrls: [
+    "https://nfs.faireconomy.media/cc_calendar_thisweek.xml",
+    "https://nfs.faireconomy.media/cc_calendar_nextweek.xml"
+  ],
   fxCountries: ["USD", "EUR", "GBP"],
   refetchMs: 30 * 60 * 1000, // 30 min — well under FairEconomy's rate limit
   maxRows: 8
@@ -401,9 +407,13 @@ function normalizeEventTitle(title) {
 }
 
 async function fetchForexFactoryEvents() {
-  const text = await fetchTextViaProxies(CALENDAR_CONFIG.ffUrl);
-  const raw = JSON.parse(text); // [{title,country,date,impact,forecast,previous}]
-  return raw
+  const results = await Promise.allSettled(CALENDAR_CONFIG.ffUrls.map(fetchTextViaProxies));
+  const all = [];
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    try { all.push(...JSON.parse(r.value)); } catch (e) { /* skip malformed week */ }
+  }
+  return all
     .filter((e) => CALENDAR_CONFIG.fxCountries.includes(e.country))
     .filter((e) => e.impact === "Medium" || e.impact === "High")
     .map((e) => ({
@@ -429,10 +439,15 @@ function parseCcDateTimeToUtc(dateStr, timeStr) {
 }
 
 async function fetchCryptoCraftEvents() {
-  const text = await fetchTextViaProxies(CALENDAR_CONFIG.ccUrl);
-  const doc = new DOMParser().parseFromString(text, "text/xml");
-  if (doc.querySelector("parsererror")) return [];
-  return Array.from(doc.querySelectorAll("event")).map((ev) => {
+  const results = await Promise.allSettled(CALENDAR_CONFIG.ccUrls.map(fetchTextViaProxies));
+  const all = [];
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    const doc = new DOMParser().parseFromString(r.value, "text/xml");
+    if (doc.querySelector("parsererror")) continue;
+    all.push(...Array.from(doc.querySelectorAll("event")));
+  }
+  return all.map((ev) => {
     const title = ev.querySelector("title")?.textContent || "";
     const country = ev.querySelector("country")?.textContent || "";
     const dateStr = ev.querySelector("date")?.textContent || "";
@@ -504,7 +519,10 @@ function renderEventsCalendar() {
     .slice(0, CALENDAR_CONFIG.maxRows);
 
   if (upcoming.length === 0) {
-    listEl.innerHTML = '<div class="event-empty">Keine bevorstehenden Termine in der Liste.</div>';
+    const hint = eventsState.usingFallback
+      ? "Keine bevorstehenden Termine in der Fallback-Liste."
+      : "Keine passenden Termine gefunden — evtl. Feed-Limit erreicht, nächster Versuch automatisch.";
+    listEl.innerHTML = '<div class="event-empty">' + hint + '</div>';
     return;
   }
 
