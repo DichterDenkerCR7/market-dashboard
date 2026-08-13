@@ -1,7 +1,7 @@
 const CONFIG = {
   // Replace this once with your own Cloudflare Worker URL.
   // Example: https://market-dashboard-proxy.yourname.workers.dev
-  dataProxyBase: "https://YOUR-WORKER-URL.workers.dev",
+  dataProxyBase: "https://market-dashboard-proxy.m-atmanspacher1.workers.dev/",
 
   chartRange: "3mo",
   chartInterval: "1h",
