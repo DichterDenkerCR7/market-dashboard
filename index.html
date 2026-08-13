@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -80,6 +80,18 @@
 
 </div>
 
-<script src="script.js?v=11"></script>
+<!-- Background music — tiny, out of the way. Browsers block audio
+     autoplay without a click, so you'll need to tap play once after
+     turning the TV on; it then keeps running until the next page
+     reload (see CONFIG.pageReloadMs in script.js). -->
+<div class="spotify-widget">
+  <iframe
+    src="https://open.spotify.com/embed/playlist/0yX56lDtz3aa0AzZ35ELew?utm_source=generator&theme=0"
+    width="100%" height="100%" frameborder="0"
+    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+    loading="lazy"></iframe>
+</div>
+
+<script src="script.js?v=12"></script>
 </body>
 </html>

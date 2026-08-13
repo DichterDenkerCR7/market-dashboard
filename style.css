@@ -302,6 +302,22 @@ body::before {
   padding: 10px 0;
 }
 
+/* ---------------- SPOTIFY (tiny, tucked away) ---------------- */
+.spotify-widget {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  width: 230px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  opacity: 0.55;
+  z-index: 50;
+  background: var(--panel);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+.spotify-widget iframe { display: block; border: none; }
+
 /* ---------------- TradingView iframe polish ---------------- */
 .tradingview-widget-container iframe { border: none; }
 

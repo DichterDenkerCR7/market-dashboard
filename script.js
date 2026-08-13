@@ -55,7 +55,11 @@ const CONFIG = {
 
   // Data refresh + housekeeping
   priceRefreshMs: 60 * 1000,        // 60s (CoinGecko free limit: ~10-30 req/min)
-  pageReloadMs: 4 * 60 * 60 * 1000  // full reload every 4h to stay fresh & light
+  // Was 4h; stretched to 24h because a full reload also restarts the
+  // Spotify player below (browsers block autoplay-with-sound, so every
+  // reload means tapping play again). Once a day is a reasonable
+  // trade-off between staying fresh and not interrupting music.
+  pageReloadMs: 24 * 60 * 60 * 1000
 };
 
 /* ---------------------------------------------------------------------
