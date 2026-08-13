@@ -59,6 +59,45 @@ const CONFIG = {
 };
 
 /* ---------------------------------------------------------------------
+   1b) Known macro calendar — FOMC, ECB, US CPI, US NFP (rest of 2026)
+   ---------------------------------------------------------------------
+   Why hand-curated instead of a widget: the free TradingView Events
+   widget always ships Actual/Forecast/Prior columns and full-size flag
+   icons — there's no documented option to strip those, since it's a
+   cross-origin iframe we can't restyle. FOMC/ECB meeting dates and US
+   BLS release dates are published by the Fed/ECB/BLS *months in advance*
+   on a fixed schedule, so hand-entering them is both accurate and low
+   maintenance (a few new rows, twice a year).
+   Sources (checked Aug 2026): federalreserve.gov meeting calendar,
+   ecb.europa.eu Governing Council calendar, bls.gov/schedule.
+   Dates below are stored as UTC instants (Date.UTC) computed from each
+   institution's published local time + that date's correct DST offset,
+   so the dashboard just renders them in the browser's local time —
+   same pattern as the clock elsewhere on this page.
+   To add next year's dates: append rows in the same format once the
+   institutions publish their next calendar (typically ~August for the
+   following year).
+   --------------------------------------------------------------------- */
+const KNOWN_EVENTS = [
+  { utc: Date.UTC(2026, 8, 4, 12, 30),  name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 8, 10, 12, 15), name: "EZB Zinsentscheid",            country: "eu", importance: 3 },
+  { utc: Date.UTC(2026, 8, 11, 12, 30), name: "US CPI (Inflation)",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 8, 16, 18, 0),  name: "FOMC Zinsentscheid",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 9, 2, 12, 30),  name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 9, 14, 12, 30), name: "US CPI (Inflation)",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 9, 28, 18, 0),  name: "FOMC Zinsentscheid",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 9, 29, 13, 15), name: "EZB Zinsentscheid",            country: "eu", importance: 3 },
+  { utc: Date.UTC(2026, 10, 6, 13, 30), name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 10, 10, 13, 30),name: "US CPI (Inflation)",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 11, 4, 13, 30), name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 11, 9, 19, 0),  name: "FOMC Zinsentscheid",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 11, 10, 13, 30),name: "US CPI (Inflation)",           country: "us", importance: 3 },
+  { utc: Date.UTC(2026, 11, 17, 13, 15),name: "EZB Zinsentscheid",            country: "eu", importance: 3 }
+];
+
+const EVENT_FLAGS = { us: "🇺🇸", eu: "🇪🇺" };
+
+/* ---------------------------------------------------------------------
    2) TradingView widget embedding helper
    --------------------------------------------------------------------- */
 function embedTVWidget(containerId, scriptSrc, config) {
@@ -143,19 +182,9 @@ function initWidgets() {
   // News: handled separately by the custom headline rotator (see
   // initNewsRotator below) — not a TradingView widget, see explanation there.
 
-  // Economic calendar — "compact" shrinks the country-flag icons and
-  // condenses the row layout (documented TradingView behavior for this
-  // widget), which is what was taking up too much space.
-  embedTVWidget("tv_calendar", "https://s3.tradingview.com/external-embedding/embed-widget-events.js", {
-    width: "100%",
-    height: "100%",
-    colorTheme: "dark",
-    isTransparent: true,
-    displayMode: "compact",
-    locale: "de_DE",
-    importanceFilter: CONFIG.calendarImportance,
-    countryFilter: CONFIG.calendarCountries
-  });
+  // Economic calendar: handled by the custom KNOWN_EVENTS list (see
+  // renderEventsCalendar below) — not a TradingView widget, see comment
+  // on KNOWN_EVENTS for why.
 }
 
 /* ---------------------------------------------------------------------
@@ -194,7 +223,16 @@ const NEWS_CONFIG = {
     "https://www.cnbc.com/id/15838459/device/rss/rss.html", // CNBC Markets
     "https://www.cnbc.com/id/19794221/device/rss/rss.html"  // CNBC Investing
   ],
-  corsProxy: "https://api.allorigins.win/raw?url=",
+  // Fallback chain: api.allorigins.win alone turned out to fail roughly
+  // half the time (a known, documented issue with that free service) —
+  // so we now try three free, keyless proxies in order and use whichever
+  // answers first. corsproxy.io explicitly whitelists *.github.io on its
+  // free tier, which is exactly where this dashboard is hosted.
+  corsProxies: [
+    (url) => "https://corsproxy.io/?url=" + encodeURIComponent(url),
+    (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
+    (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)
+  ],
   rotateMs: 15 * 1000,      // one full headline visible for 15s
   refetchMs: 10 * 60 * 1000, // pull fresh headlines every 10 min
   maxItems: 25
@@ -219,10 +257,21 @@ function parseRssItems(xmlText, fallbackSource) {
 }
 
 async function fetchNewsFeed(url) {
-  const res = await fetch(NEWS_CONFIG.corsProxy + encodeURIComponent(url));
-  if (!res.ok) throw new Error("News-Feed HTTP " + res.status);
-  const text = await res.text();
-  return parseRssItems(text, "CNBC");
+  let lastError = null;
+  for (const buildProxyUrl of NEWS_CONFIG.corsProxies) {
+    try {
+      const res = await fetch(buildProxyUrl(url));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const text = await res.text();
+      const items = parseRssItems(text, "CNBC");
+      if (items.length > 0) return items;
+      throw new Error("leere Antwort");
+    } catch (err) {
+      lastError = err;
+      // try the next proxy in the chain
+    }
+  }
+  throw lastError || new Error("Alle Proxys fehlgeschlagen");
 }
 
 async function refreshNewsFeeds() {
@@ -295,6 +344,53 @@ function initNewsRotator() {
   refreshNewsFeeds();
   setInterval(advanceHeadline, NEWS_CONFIG.rotateMs);
   setInterval(refreshNewsFeeds, NEWS_CONFIG.refetchMs);
+}
+
+/* ---------------------------------------------------------------------
+   3c) Events Calendar — minimal list: time, event, flag, importance.
+   No forecast/actual/prior, no oversized icons — see KNOWN_EVENTS above.
+   --------------------------------------------------------------------- */
+function relativeDayDe(date) {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfEvent = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfEvent - startOfToday) / 86400000);
+  if (diffDays === 0) return "heute";
+  if (diffDays === 1) return "morgen";
+  return "in " + diffDays + " Tagen";
+}
+
+function renderEventsCalendar() {
+  const listEl = document.getElementById("eventsList");
+  if (!listEl) return;
+  const now = Date.now();
+  const upcoming = KNOWN_EVENTS
+    .filter((ev) => ev.utc > now)
+    .sort((a, b) => a.utc - b.utc)
+    .slice(0, 8);
+
+  if (upcoming.length === 0) {
+    listEl.innerHTML = '<div class="event-empty">Keine bevorstehenden Termine in der Liste.</div>';
+    return;
+  }
+
+  listEl.innerHTML = upcoming.map((ev) => {
+    const d = new Date(ev.utc);
+    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    const day = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+    const stars = "★".repeat(ev.importance) + "☆".repeat(3 - ev.importance);
+    const flag = EVENT_FLAGS[ev.country] || "";
+    return `
+      <div class="event-row">
+        <div class="event-when">
+          <span class="event-time">${time}</span>
+          <span class="event-date">${day} · ${relativeDayDe(d)}</span>
+        </div>
+        <span class="event-flag">${flag}</span>
+        <span class="event-name">${ev.name}</span>
+        <span class="event-stars">${stars}</span>
+      </div>`;
+  }).join("");
 }
 
 /* ---------------------------------------------------------------------
@@ -390,6 +486,8 @@ async function refreshMarketAwareness() {
 function boot() {
   initWidgets();
   initNewsRotator();
+  renderEventsCalendar();
+  setInterval(renderEventsCalendar, 5 * 60 * 1000);
 
   updateClock();
   setInterval(updateClock, 1000);

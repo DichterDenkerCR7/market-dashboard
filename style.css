@@ -71,7 +71,7 @@ body::before {
   display: grid;
   gap: 8px;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: 30px minmax(0, 1.9fr) 40px minmax(0, 1.3fr);
+  grid-template-rows: 30px minmax(0, 1.9fr) 48px minmax(0, 1.3fr);
   grid-template-areas:
     "header  header"
     "chartbtc chartndx"
@@ -200,7 +200,9 @@ body::before {
 .ticker-panel {
   grid-area: ticker;
   padding: 0;
-  display: block;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
 /* ---------------- NEWS ROTATOR ---------------- */
@@ -237,6 +239,55 @@ body::before {
 }
 
 .news-meta-sep { color: var(--ink-faint); }
+
+/* ---------------- EVENTS LIST ---------------- */
+.events-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 14px;
+}
+
+.event-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.event-row:last-child { border-bottom: none; }
+
+.event-when {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 78px;
+}
+.event-time { font-size: 15px; font-weight: 600; color: var(--ink); }
+.event-date { font-size: 10px; color: var(--ink-faint); }
+
+.event-flag { flex: 0 0 auto; font-size: 15px; }
+
+.event-name {
+  flex: 1 1 auto;
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.event-stars {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--warn);
+  letter-spacing: 1px;
+}
+
+.event-empty {
+  color: var(--ink-faint);
+  font-size: 13px;
+  padding: 10px 0;
+}
 
 /* ---------------- TradingView iframe polish ---------------- */
 .tradingview-widget-container iframe { border: none; }
