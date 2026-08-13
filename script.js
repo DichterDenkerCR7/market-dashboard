@@ -16,6 +16,16 @@ const CONFIG = {
   chartNdx: "FX:NAS100",
   chartInterval: "60", // 60 = 1H candles
 
+  // EMA ribbon — equivalent to the requested Fib EMA 21/55/89/144
+  // Pine idea. TradingView widgets cannot load arbitrary Pine scripts,
+  // so we recreate the same four EMAs with the built-in MAExp study.
+  emaRibbon: [
+    { length: 21, color: "#FF4D4D" },
+    { length: 55, color: "#FF9F43" },
+    { length: 89, color: "#4DD8FF" },
+    { length: 144, color: "#4D7CFE" }
+  ],
+
   // Compact overview strip (TradingView "Ticker Tape" symbols)
   // NOTE: TVC:VIX / TVC:US10Y can fail to render (licensed Refinitiv/Cboe
   // feed). FRED:VIXCLS / FRED:DGS10 are official, fully free Fed data —
@@ -65,7 +75,7 @@ function embedTVWidget(containerId, scriptSrc, config) {
 }
 
 function initWidgets() {
-  // Big chart: Bitcoin
+  // Big chart: Bitcoin + EMA 21 / 55 / 89 / 144
   embedTVWidget("tv_btc_chart", "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", {
     autosize: true,
     symbol: CONFIG.chartBtc,
@@ -82,10 +92,24 @@ function initWidgets() {
     save_image: false,
     calendar: false,
     backgroundColor: "rgba(16,21,28,1)",
-    gridColor: "rgba(33,41,52,0.5)"
+    gridColor: "rgba(33,41,52,0.5)",
+    studies: CONFIG.emaRibbon.map((ema) => ({
+      id: "MAExp@tv-basicstudies",
+      inputs: { length: ema.length }
+    })),
+    studies_overrides: {
+      "moving average exponential.0.plot.color": CONFIG.emaRibbon[0].color,
+      "moving average exponential.1.plot.color": CONFIG.emaRibbon[1].color,
+      "moving average exponential.2.plot.color": CONFIG.emaRibbon[2].color,
+      "moving average exponential.3.plot.color": CONFIG.emaRibbon[3].color,
+      "moving average exponential.0.plot.linewidth": 2,
+      "moving average exponential.1.plot.linewidth": 2,
+      "moving average exponential.2.plot.linewidth": 2,
+      "moving average exponential.3.plot.linewidth": 2
+    }
   });
 
-  // Big chart: Nasdaq 100
+  // Big chart: Nasdaq 100 + EMA 21 / 55 / 89 / 144
   embedTVWidget("tv_ndx_chart", "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", {
     autosize: true,
     symbol: CONFIG.chartNdx,
@@ -102,7 +126,21 @@ function initWidgets() {
     save_image: false,
     calendar: false,
     backgroundColor: "rgba(16,21,28,1)",
-    gridColor: "rgba(33,41,52,0.5)"
+    gridColor: "rgba(33,41,52,0.5)",
+    studies: CONFIG.emaRibbon.map((ema) => ({
+      id: "MAExp@tv-basicstudies",
+      inputs: { length: ema.length }
+    })),
+    studies_overrides: {
+      "moving average exponential.0.plot.color": CONFIG.emaRibbon[0].color,
+      "moving average exponential.1.plot.color": CONFIG.emaRibbon[1].color,
+      "moving average exponential.2.plot.color": CONFIG.emaRibbon[2].color,
+      "moving average exponential.3.plot.color": CONFIG.emaRibbon[3].color,
+      "moving average exponential.0.plot.linewidth": 2,
+      "moving average exponential.1.plot.linewidth": 2,
+      "moving average exponential.2.plot.linewidth": 2,
+      "moving average exponential.3.plot.linewidth": 2
+    }
   });
 
   // Compact overview strip
