@@ -95,6 +95,7 @@ function initWidgets() {
     gridColor: "rgba(33,41,52,0.5)",
     studies: CONFIG.emaRibbon.map((ema) => ({
       id: "MAExp@tv-basicstudies",
+      version: 60,
       inputs: { length: ema.length }
     })),
     studies_overrides: {
@@ -129,6 +130,7 @@ function initWidgets() {
     gridColor: "rgba(33,41,52,0.5)",
     studies: CONFIG.emaRibbon.map((ema) => ({
       id: "MAExp@tv-basicstudies",
+      version: 60,
       inputs: { length: ema.length }
     })),
     studies_overrides: {
@@ -180,10 +182,25 @@ function initWidgets() {
    3) Clock
    --------------------------------------------------------------------- */
 function updateClock() {
-  const el = document.getElementById("clock");
-  if (!el) return;
   const now = new Date();
-  el.textContent = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const clockEl = document.getElementById("clock");
+  const dateEl = document.getElementById("date");
+
+  if (clockEl) {
+    clockEl.textContent = now.toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }
+
+  if (dateEl) {
+    dateEl.textContent = now.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  }
 }
 
 /* ---------------------------------------------------------------------
