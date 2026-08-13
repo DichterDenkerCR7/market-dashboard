@@ -16,6 +16,16 @@ const CONFIG = {
   chartNdx: "FX:NAS100",
   chartInterval: "60", // 60 = 1H candles
 
+  // EMA overlay for both big charts. NOTE: the free/keyless TradingView
+  // embed widget can only set ONE length for a given indicator type across
+  // all its instances — adding "MAExp@tv-basicstudies" four times would
+  // NOT give four independent lengths/colors, it would silently apply the
+  // same length to all four (confirmed platform limitation, not a bug
+  // here). So this dashboard shows one correctly-computed EMA per chart.
+  // Change the length below if you'd rather watch e.g. 55 instead of 21.
+  emaLength: 21,
+  emaColor: "#4FD8C4",
+
   // Compact overview strip (TradingView "Ticker Tape" symbols)
   // NOTE: TVC:VIX / TVC:US10Y can fail to render (licensed Refinitiv/Cboe
   // feed). FRED:VIXCLS / FRED:DGS10 are official, fully free Fed data —
@@ -75,12 +85,18 @@ function initWidgets() {
     style: "1",
     locale: "de_DE",
     hide_top_toolbar: true,
-    hide_legend: false,
+    hide_legend: true,
     hide_volume: true,
     withdateranges: false,
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
+    studies: ["MAExp@tv-basicstudies"],
+    studies_overrides: {
+      "moving average exponential.length": CONFIG.emaLength,
+      "moving average exponential.plot.color": CONFIG.emaColor,
+      "moving average exponential.plot.linewidth": 2
+    },
     backgroundColor: "rgba(16,21,28,1)",
     gridColor: "rgba(33,41,52,0.5)"
   });
@@ -95,31 +111,41 @@ function initWidgets() {
     style: "1",
     locale: "de_DE",
     hide_top_toolbar: true,
-    hide_legend: false,
+    hide_legend: true,
     hide_volume: true,
     withdateranges: false,
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
+    studies: ["MAExp@tv-basicstudies"],
+    studies_overrides: {
+      "moving average exponential.length": CONFIG.emaLength,
+      "moving average exponential.plot.color": CONFIG.emaColor,
+      "moving average exponential.plot.linewidth": 2
+    },
     backgroundColor: "rgba(16,21,28,1)",
     gridColor: "rgba(33,41,52,0.5)"
   });
 
-  // Compact overview strip
+  // Compact overview strip — "regular" gives fixed-width items with
+  // consistent spacing; "adaptive" (previous setting) reflows item widths
+  // based on container size, which is what caused the uneven gaps/cut-off
+  // labels reported on the TV.
   embedTVWidget("tv_ticker_tape", "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js", {
     symbols: CONFIG.tickerSymbols,
     showSymbolLogo: false,
     isTransparent: false,
-    displayMode: "adaptive",
+    displayMode: "regular",
     colorTheme: "dark",
     locale: "de_DE"
   });
 
-  // News (TradingView "Top Stories")
+  // News (TradingView "Top Stories") — "compact" is the dense text-list
+  // mode (no big preview cards), so far more headlines fit in the panel.
   embedTVWidget("tv_news", "https://s3.tradingview.com/external-embedding/embed-widget-timeline.js", {
     feedMode: "all_symbols",
     isTransparent: true,
-    displayMode: "regular",
+    displayMode: "compact",
     width: "100%",
     height: "100%",
     colorTheme: "dark",
@@ -142,10 +168,15 @@ function initWidgets() {
    3) Clock
    --------------------------------------------------------------------- */
 function updateClock() {
-  const el = document.getElementById("clock");
-  if (!el) return;
+  const clockEl = document.getElementById("clock");
+  const dateEl = document.getElementById("dateDisplay");
   const now = new Date();
-  el.textContent = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  if (clockEl) {
+    clockEl.textContent = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  if (dateEl) {
+    dateEl.textContent = now.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -226,24 +257,6 @@ function renderStatus() {
     dot.className = "status-dot " + level;
     label.className = "status-label " + level;
     label.textContent = STATUS_LABELS[level];
-  }
-
-  const ctxBtc = document.getElementById("ctxBtc");
-  if (ctxBtc) {
-    ctxBtc.textContent = fmtPct(marketState.btcChangePct);
-    ctxBtc.className = "ctx-value " + (marketState.btcChangePct > 0 ? "up" : marketState.btcChangePct < 0 ? "down" : "");
-  }
-
-  const ctxNote = document.getElementById("ctxNote");
-  if (ctxNote) {
-    ctxNote.textContent = "Status basiert auf BTC 24h (CoinGecko, ohne Key) · NASDAQ-Bewegung: siehe Chart/Ticker oben";
-  }
-
-  const ctxUpdated = document.getElementById("ctxUpdated");
-  if (ctxUpdated) {
-    ctxUpdated.textContent = marketState.lastUpdate
-      ? marketState.lastUpdate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-      : "--:--:--";
   }
 }
 

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
@@ -23,12 +23,15 @@
       <span class="status-dot" id="statusDot"></span>
       <span class="status-label" id="statusLabel">LÄDT…</span>
     </div>
-    <div class="clock" id="clock">--:--:--</div>
+    <div class="datetime">
+      <span class="date" id="dateDisplay">--.--.----</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
   </header>
 
   <!-- ============ BIG CHART: BITCOIN ============ -->
   <section class="panel chart-panel" id="panelBtc">
-    <div class="panel-title"><span class="panel-eyebrow">01</span> BITCOIN <span class="panel-sub">BTC / USD</span></div>
+    <div class="panel-title"><span class="panel-eyebrow">01</span> BITCOIN <span class="panel-sub">BTC / USDT</span></div>
     <div class="tv-wrap">
       <div class="tradingview-widget-container" id="tv_btc_chart" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
@@ -38,7 +41,7 @@
 
   <!-- ============ BIG CHART: NASDAQ 100 ============ -->
   <section class="panel chart-panel" id="panelNdx">
-    <div class="panel-title"><span class="panel-eyebrow">02</span> NASDAQ 100 <span class="panel-sub">NDX</span></div>
+    <div class="panel-title"><span class="panel-eyebrow">02</span> NASDAQ 100 <span class="panel-sub">US100 CASH CFD</span></div>
     <div class="tv-wrap">
       <div class="tradingview-widget-container" id="tv_ndx_chart" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
@@ -55,7 +58,7 @@
 
   <!-- ============ NEWS ============ -->
   <section class="panel news-panel">
-    <div class="panel-title"><span class="panel-eyebrow">03</span> WICHTIGE NEWS</div>
+    <div class="panel-title"><span class="panel-eyebrow">03</span> NEWS</div>
     <div class="tv-wrap">
       <div class="tradingview-widget-container" id="tv_news" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
@@ -65,7 +68,7 @@
 
   <!-- ============ ECONOMIC CALENDAR ============ -->
   <section class="panel calendar-panel">
-    <div class="panel-title"><span class="panel-eyebrow">04</span> NÄCHSTE EVENTS</div>
+    <div class="panel-title"><span class="panel-eyebrow">04</span> EVENTS</div>
     <div class="tv-wrap">
       <div class="tradingview-widget-container" id="tv_calendar" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
@@ -73,23 +76,8 @@
     </div>
   </section>
 
-  <!-- ============ CONTEXT FOOTER ============ -->
-  <footer class="bar-footer" id="contextBar">
-    <div class="ctx-item">
-      <span class="ctx-label">BTC 24H</span>
-      <span class="ctx-value" id="ctxBtc">…</span>
-    </div>
-    <div class="ctx-sep">│</div>
-    <div class="ctx-item ctx-note" id="ctxNote">Quelle: CoinGecko (ohne Key)</div>
-    <div class="ctx-sep">│</div>
-    <div class="ctx-item ctx-updated">
-      <span class="ctx-label">AKTUALISIERT</span>
-      <span class="ctx-value" id="ctxUpdated">--:--:--</span>
-    </div>
-  </footer>
-
 </div>
 
-<script src="script.js?v=3"></script>
+<script src="script.js?v=5"></script>
 </body>
 </html>
