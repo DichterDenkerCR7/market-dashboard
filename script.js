@@ -1,208 +1,121 @@
-const CONFIG = {
-  // Replace this once with your own Cloudflare Worker URL.
-  // Example: https://market-dashboard-proxy.yourname.workers.dev
-  dataProxyBase: "https://market-dashboard-proxy.m-atmanspacher1.workers.dev",
+/* =====================================================================
+   MARKET AWARENESS TERMINAL — script.js
+   No API keys. No backend. No login. Everything below is safe to keep
+   in a public GitHub repository (required for free GitHub Pages).
+   ===================================================================== */
 
-  chartRange: "3mo",
-  chartInterval: "1h",
-  chartDisplayDays: 12,
-  emaLengths: [21, 55, 89, 144],
-  emaColors: ["#ff3b30", "#ff9f0a", "#19d3d1", "#356ae6"],
-  assets: {
-    btc: { container: "btcChart", symbol: "BTC-USD", label: "Bitcoin" },
-    ndx: { container: "ndxChart", symbol: "%5ENDX", label: "Nasdaq 100" }
+/* ---------------------------------------------------------------------
+   1) CONFIG — edit this block to change markets, wording or timing.
+   --------------------------------------------------------------------- */
+const CONFIG = {
+  // Big charts (TradingView "Advanced Chart" symbols)
+  chartBtc: "BINANCE:BTCUSDT",
+  // NASDAQ:NDX needs a paid NASDAQ real-time data license and stays blank
+  // in free widgets. FX:NAS100 (FXCM "US 100 Cash CFD") is license-free,
+  // trades near round-the-clock and is the symbol requested by the user.
+  chartNdx: "FX:NAS100",
+  chartInterval: "60", // 60 = 1H candles
+
+  // Compact overview strip (TradingView "Ticker Tape" symbols)
+  // NOTE: TVC:VIX / TVC:US10Y can fail to render (licensed Refinitiv/Cboe
+  // feed). FRED:VIXCLS / FRED:DGS10 are official, fully free Fed data —
+  // updates once daily instead of tick-by-tick, which is fine for a
+  // glance-level context strip.
+  tickerSymbols: [
+    { proName: "FOREXCOM:SPXUSD", title: "S&P 500" },
+    { proName: "FOREXCOM:NSXUSD", title: "NASDAQ 100" },
+    { proName: "TVC:GOLD",        title: "GOLD" },
+    { proName: "BITSTAMP:BTCUSD", title: "BITCOIN" },
+    { proName: "FX:EURUSD",       title: "EUR/USD" },
+    { proName: "FRED:DGS10",      title: "US 10Y" },
+    { proName: "FRED:VIXCLS",     title: "VIX" }
+  ],
+
+  // Economic calendar filter: "-1,0,1" = low+med+high, "0,1" = med+high only
+  calendarImportance: "0,1",
+  calendarCountries: "us,eu",
+
+  // Market-awareness thresholds (absolute % move, 24h)
+  thresholds: {
+    btcElevated: 2.0,   // |BTC 24h %| above this -> elevated
+    btcHigh: 4.0,        // -> high
+    ndxElevated: 1.0,   // |QQQ 24h %| above this -> elevated
+    ndxHigh: 2.0
   },
-  thresholds: { btcElevated: 2, btcHigh: 4, ndxElevated: 1, ndxHigh: 2 },
-  refreshQuoteMs: 60 * 1000,
-  refreshChartsMs: 5 * 60 * 1000,
-  pageReloadMs: 4 * 60 * 60 * 1000
+
+  // Data refresh + housekeeping
+  priceRefreshMs: 60 * 1000,        // 60s (CoinGecko free limit: ~10-30 req/min)
+  pageReloadMs: 4 * 60 * 60 * 1000  // full reload every 4h to stay fresh & light
 };
 
-const charts = new Map();
-const marketState = { btcChangePct: null, ndxChangePct: null };
-
-function fmtPct(n) {
-  return typeof n !== "number" || Number.isNaN(n) ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(2).replace(".", ",")} %`;
-}
-
-function updateDateTime() {
-  const now = new Date();
-  const d = document.getElementById("date");
-  const c = document.getElementById("clock");
-  if (d) d.textContent = now.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-  if (c) c.textContent = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function proxyUrl(symbol, range, interval) {
-  const base = CONFIG.dataProxyBase.replace(/\/$/, "");
-  return `${base}/yahoo/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
-}
-
-async function fetchYahooChart(symbol, range, interval) {
-  if (!CONFIG.dataProxyBase || CONFIG.dataProxyBase.includes("YOUR-WORKER-URL")) {
-    throw new Error("Cloudflare Worker URL fehlt");
-  }
-  const response = await fetch(proxyUrl(symbol, range, interval), { cache: "no-store" });
-  if (!response.ok) throw new Error(`Datenquelle HTTP ${response.status}`);
-  const json = await response.json();
-  const result = json?.chart?.result?.[0];
-  if (!result) throw new Error("Keine Kursdaten erhalten");
-  const quote = result.indicators?.quote?.[0];
-  const timestamps = result.timestamp || [];
-  const candles = [];
-  for (let i = 0; i < timestamps.length; i++) {
-    const values = [quote?.open?.[i], quote?.high?.[i], quote?.low?.[i], quote?.close?.[i]];
-    if (values.some(v => typeof v !== "number" || !Number.isFinite(v))) continue;
-    candles.push({
-      time: timestamps[i],
-      open: values[0],
-      high: values[1],
-      low: values[2],
-      close: values[3]
-    });
-  }
-  return candles;
-}
-
-function calculateEMA(data, length) {
-  if (!Array.isArray(data) || data.length < length) return [];
-
-  const result = [];
-  let sum = 0;
-  for (let i = 0; i < length; i++) sum += data[i].value;
-  let ema = sum / length;
-  result.push({ time: data[length - 1].time, value: ema });
-
-  const multiplier = 2 / (length + 1);
-  for (let i = length; i < data.length; i++) {
-    ema = (data[i].value - ema) * multiplier + ema;
-    result.push({ time: data[i].time, value: ema });
-  }
-  return result;
-}
-
-function addLoading(el) {
-  el.innerHTML = '<div class="chart-loading">CHART WIRD GELADEN…</div>';
-}
-
-function addError(el, message) {
-  el.innerHTML = `<div class="chart-error">${message}</div>`;
-}
-
-function createChart(containerId, data) {
-  const el = document.getElementById(containerId);
-  if (!el || !window.LightweightCharts) return null;
-
-  const previous = charts.get(containerId);
-  if (previous?.chart) {
-    try { previous.chart.remove(); } catch (_) {}
-  }
-
-  el.innerHTML = "";
-  const L = window.LightweightCharts;
-  const chart = L.createChart(el, {
-    width: el.clientWidth,
-    height: el.clientHeight,
-    layout: {
-      background: { type: L.ColorType.Solid, color: "#0e141b" },
-      textColor: "#a8b2bf",
-      fontFamily: "JetBrains Mono, monospace",
-      fontSize: 12
-    },
-    grid: {
-      vertLines: { color: "#18212b" },
-      horzLines: { color: "#18212b" }
-    },
-    rightPriceScale: {
-      borderColor: "#2a3440",
-      scaleMargins: { top: 0.08, bottom: 0.08 }
-    },
-    timeScale: {
-      borderColor: "#2a3440",
-      timeVisible: true,
-      secondsVisible: false,
-      rightOffset: 3,
-      barSpacing: 7
-    },
-    crosshair: { mode: L.CrosshairMode.Normal },
-    handleScroll: false,
-    handleScale: false,
-    localization: { locale: "de-DE" },
-    attributionLogo: true
-  });
-
-  const candles = chart.addCandlestickSeries({
-    upColor: "#26a69a",
-    downColor: "#ef5350",
-    borderUpColor: "#26a69a",
-    borderDownColor: "#ef5350",
-    wickUpColor: "#26a69a",
-    wickDownColor: "#ef5350",
-    priceLineVisible: true,
-    lastValueVisible: true
-  });
-  candles.setData(data);
-
-  const closeData = data.map(x => ({ time: x.time, value: x.close }));
-  const emaSeries = [];
-  CONFIG.emaLengths.forEach((length, index) => {
-    const series = chart.addLineSeries({
-      color: CONFIG.emaColors[index],
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-      title: `EMA ${length}`
-    });
-    series.setData(calculateEMA(closeData, length));
-    emaSeries.push(series);
-  });
-
-  const barsToShow = Math.round((CONFIG.chartDisplayDays * 24));
-  const from = Math.max(0, data.length - barsToShow);
-  chart.timeScale().setVisibleLogicalRange({ from, to: data.length - 1 });
-
-  const resizeObserver = new ResizeObserver(() => {
-    chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
-  });
-  resizeObserver.observe(el);
-
-  charts.set(containerId, { chart, candles, emaSeries, resizeObserver });
-  return chart;
-}
-
-async function loadOneChart(asset) {
-  const el = document.getElementById(asset.container);
-  if (!el) return;
-  addLoading(el);
-  try {
-    const data = await fetchYahooChart(asset.symbol, CONFIG.chartRange, CONFIG.chartInterval);
-    if (data.length < 180) throw new Error("Zu wenige Kursdaten für EMA 144");
-    createChart(asset.container, data);
-  } catch (error) {
-    console.error(asset.label, error);
-    addError(el, `${asset.label}<br><br>Chart-Daten momentan nicht verfügbar`);
-  }
-}
-
-async function loadCharts() {
-  await Promise.all(Object.values(CONFIG.assets).map(loadOneChart));
-}
-
-/* TradingView widgets: these are the parts that already work on the TV browser. */
-function embedTVWidget(containerId, src, config) {
+/* ---------------------------------------------------------------------
+   2) TradingView widget embedding helper
+   --------------------------------------------------------------------- */
+function embedTVWidget(containerId, scriptSrc, config) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  container.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+  const target = container.querySelector(".tradingview-widget-container__widget") || container;
   const script = document.createElement("script");
   script.type = "text/javascript";
-  script.src = src;
+  script.src = scriptSrc;
   script.async = true;
   script.text = JSON.stringify(config);
   container.appendChild(script);
+  void target; // container-level append matches TradingView's own embed pattern
 }
 
-function initTVWidgets() {
+function initWidgets() {
+  // Big chart: Bitcoin
+  embedTVWidget("tv_btc_chart", "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", {
+    autosize: true,
+    symbol: CONFIG.chartBtc,
+    interval: CONFIG.chartInterval,
+    timezone: "Etc/UTC",
+    theme: "dark",
+    style: "1",
+    locale: "de_DE",
+    hide_top_toolbar: true,
+    hide_legend: false,
+    hide_volume: true,
+    withdateranges: false,
+    allow_symbol_change: false,
+    save_image: false,
+    calendar: false,
+    backgroundColor: "rgba(16,21,28,1)",
+    gridColor: "rgba(33,41,52,0.5)"
+  });
+
+  // Big chart: Nasdaq 100
+  embedTVWidget("tv_ndx_chart", "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", {
+    autosize: true,
+    symbol: CONFIG.chartNdx,
+    interval: CONFIG.chartInterval,
+    timezone: "Etc/UTC",
+    theme: "dark",
+    style: "1",
+    locale: "de_DE",
+    hide_top_toolbar: true,
+    hide_legend: false,
+    hide_volume: true,
+    withdateranges: false,
+    allow_symbol_change: false,
+    save_image: false,
+    calendar: false,
+    backgroundColor: "rgba(16,21,28,1)",
+    gridColor: "rgba(33,41,52,0.5)"
+  });
+
+  // Compact overview strip
+  embedTVWidget("tv_ticker_tape", "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js", {
+    symbols: CONFIG.tickerSymbols,
+    showSymbolLogo: false,
+    isTransparent: false,
+    displayMode: "adaptive",
+    colorTheme: "dark",
+    locale: "de_DE"
+  });
+
+  // News (TradingView "Top Stories")
   embedTVWidget("tv_news", "https://s3.tradingview.com/external-embedding/embed-widget-timeline.js", {
     feedMode: "all_symbols",
     isTransparent: true,
@@ -213,56 +126,89 @@ function initTVWidgets() {
     locale: "de_DE"
   });
 
+  // Economic calendar
   embedTVWidget("tv_calendar", "https://s3.tradingview.com/external-embedding/embed-widget-events.js", {
     width: "100%",
     height: "100%",
     colorTheme: "dark",
     isTransparent: true,
     locale: "de_DE",
-    importanceFilter: "0",
-    countryFilter: "us,eu"
+    importanceFilter: CONFIG.calendarImportance,
+    countryFilter: CONFIG.calendarCountries
   });
 }
 
-async function fetchQuote(symbol) {
-  const candles = await fetchYahooChart(symbol, "1d", "5m");
-  if (!candles.length) throw new Error("Keine Quote-Daten");
-  const last = candles[candles.length - 1];
-  const previous = candles.length > 1 ? candles[candles.length - 2].close : null;
-  return {
-    price: last.close,
-    pct: typeof previous === "number" && previous !== 0 ? ((last.close - previous) / previous) * 100 : null
-  };
+/* ---------------------------------------------------------------------
+   3) Clock
+   --------------------------------------------------------------------- */
+function updateClock() {
+  const el = document.getElementById("clock");
+  if (!el) return;
+  const now = new Date();
+  el.textContent = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-async function refreshAwareness() {
-  try { marketState.btcChangePct = (await fetchQuote("BTC-USD")).pct; }
-  catch (_) { marketState.btcChangePct = null; }
+/* ---------------------------------------------------------------------
+   4) Market Awareness — keyless, best-effort, never throws
+   --------------------------------------------------------------------- */
+const marketState = {
+  btcChangePct: null,
+  // Nasdaq live % is intentionally NOT fetched here: every free, keyless,
+  // CORS-enabled equity API we could use (Yahoo Finance et al.) blocks
+  // browser-side requests. Rather than call it and hide the console error,
+  // we skip it entirely — the Nasdaq ticker-tape item and the big NQ1!
+  // chart already give a live visual read. Per Abschnitt 5: vereinfachen
+  // statt eine unzuverlässige Kennzahl vortäuschen.
+  ndxChangePct: null,
+  lastUpdate: null
+};
 
-  try { marketState.ndxChangePct = (await fetchQuote("%5ENDX")).pct; }
-  catch (_) { marketState.ndxChangePct = null; }
+async function fetchBtcChange() {
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
+    );
+    if (!res.ok) throw new Error("CoinGecko HTTP " + res.status);
+    const data = await res.json();
+    const pct = data && data.bitcoin && typeof data.bitcoin.usd_24h_change === "number"
+      ? data.bitcoin.usd_24h_change
+      : null;
+    marketState.btcChangePct = pct;
+  } catch (err) {
+    marketState.btcChangePct = null;
+    console.warn("BTC-Daten aktuell nicht verfügbar:", err.message);
+  }
+}
 
-  renderStatus();
+function fmtPct(pct) {
+  if (pct === null || pct === undefined || Number.isNaN(pct)) return "n/v";
+  const sign = pct > 0 ? "+" : "";
+  return sign + pct.toFixed(2).replace(".", ",") + " %";
 }
 
 function computeStatus() {
-  let level = "normal";
-  const b = marketState.btcChangePct;
-  const n = marketState.ndxChangePct;
+  const { btcChangePct, ndxChangePct } = marketState;
   const t = CONFIG.thresholds;
 
-  if (b !== null) {
-    const abs = Math.abs(b);
-    if (abs >= t.btcHigh) level = "high";
-    else if (abs >= t.btcElevated) level = "elevated";
+  let level = "normal"; // normal | elevated | high
+  let reasons = [];
+
+  if (btcChangePct !== null) {
+    const abs = Math.abs(btcChangePct);
+    if (abs >= t.btcHigh) { level = "high"; reasons.push("BTC " + fmtPct(btcChangePct)); }
+    else if (abs >= t.btcElevated && level !== "high") { level = "elevated"; reasons.push("BTC " + fmtPct(btcChangePct)); }
   }
 
-  if (n !== null) {
-    const abs = Math.abs(n);
-    if (abs >= t.ndxHigh) level = "high";
-    else if (abs >= t.ndxElevated && level !== "high") level = "elevated";
+  if (ndxChangePct !== null) {
+    const abs = Math.abs(ndxChangePct);
+    if (abs >= t.ndxHigh) { level = "high"; reasons.push("NASDAQ " + fmtPct(ndxChangePct)); }
+    else if (abs >= t.ndxElevated && level !== "high") {
+      level = level === "high" ? "high" : "elevated";
+      reasons.push("NASDAQ " + fmtPct(ndxChangePct));
+    }
   }
-  return level;
+
+  return { level, reasons };
 }
 
 const STATUS_LABELS = {
@@ -272,26 +218,54 @@ const STATUS_LABELS = {
 };
 
 function renderStatus() {
-  const level = computeStatus();
+  const { level } = computeStatus();
+
   const dot = document.getElementById("statusDot");
   const label = document.getElementById("statusLabel");
   if (dot && label) {
-    dot.className = `status-dot ${level}`;
-    label.className = `status-label ${level}`;
+    dot.className = "status-dot " + level;
+    label.className = "status-label " + level;
     label.textContent = STATUS_LABELS[level];
+  }
+
+  const ctxBtc = document.getElementById("ctxBtc");
+  if (ctxBtc) {
+    ctxBtc.textContent = fmtPct(marketState.btcChangePct);
+    ctxBtc.className = "ctx-value " + (marketState.btcChangePct > 0 ? "up" : marketState.btcChangePct < 0 ? "down" : "");
+  }
+
+  const ctxNote = document.getElementById("ctxNote");
+  if (ctxNote) {
+    ctxNote.textContent = "Status basiert auf BTC 24h (CoinGecko, ohne Key) · NASDAQ-Bewegung: siehe Chart/Ticker oben";
+  }
+
+  const ctxUpdated = document.getElementById("ctxUpdated");
+  if (ctxUpdated) {
+    ctxUpdated.textContent = marketState.lastUpdate
+      ? marketState.lastUpdate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "--:--:--";
   }
 }
 
-async function boot() {
-  updateDateTime();
-  setInterval(updateDateTime, 1000);
+async function refreshMarketAwareness() {
+  await fetchBtcChange();
+  marketState.lastUpdate = new Date();
+  renderStatus();
+}
 
-  initTVWidgets();
-  await loadCharts();
-  await refreshAwareness();
+/* ---------------------------------------------------------------------
+   5) Boot
+   --------------------------------------------------------------------- */
+function boot() {
+  initWidgets();
 
-  setInterval(refreshAwareness, CONFIG.refreshQuoteMs);
-  setInterval(loadCharts, CONFIG.refreshChartsMs);
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  refreshMarketAwareness();
+  setInterval(refreshMarketAwareness, CONFIG.priceRefreshMs);
+
+  // Keep a TV kiosk session healthy over many hours.
   setTimeout(() => window.location.reload(), CONFIG.pageReloadMs);
 }
 

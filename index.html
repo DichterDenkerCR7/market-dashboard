@@ -3,51 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#090c10">
 <title>Market Awareness // Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
-<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-tickers.js"></script>
-<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
+
 <div class="grid">
+
+  <!-- ============ HEADER ============ -->
   <header class="bar-header">
-    <div class="date" id="date">--.--.----</div>
-    <div class="status-readout"><span class="status-dot" id="statusDot"></span><span class="status-label" id="statusLabel">LÄDT…</span></div>
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-text">MARKET AWARENESS</span>
+    </div>
+    <div class="status-readout" id="statusReadout">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-label" id="statusLabel">LÄDT…</span>
+    </div>
     <div class="clock" id="clock">--:--:--</div>
   </header>
 
+  <!-- ============ BIG CHART: BITCOIN ============ -->
   <section class="panel chart-panel" id="panelBtc">
-    <div class="panel-title"><span>BITCOIN</span><span class="panel-sub">BTC / USD · EMA 21 / 55 / 89 / 144</span></div>
-    <div class="chart-host" id="btcChart"></div>
+    <div class="panel-title"><span class="panel-eyebrow">01</span> BITCOIN <span class="panel-sub">BTC / USD</span></div>
+    <div class="tv-wrap">
+      <div class="tradingview-widget-container" id="tv_btc_chart" style="height:100%;width:100%">
+        <div class="tradingview-widget-container__widget"></div>
+      </div>
+    </div>
   </section>
 
+  <!-- ============ BIG CHART: NASDAQ 100 ============ -->
   <section class="panel chart-panel" id="panelNdx">
-    <div class="panel-title"><span>NASDAQ 100</span><span class="panel-sub">NASDAQ 100 · EMA 21 / 55 / 89 / 144</span></div>
-    <div class="chart-host" id="ndxChart"></div>
+    <div class="panel-title"><span class="panel-eyebrow">02</span> NASDAQ 100 <span class="panel-sub">NDX</span></div>
+    <div class="tv-wrap">
+      <div class="tradingview-widget-container" id="tv_ndx_chart" style="height:100%;width:100%">
+        <div class="tradingview-widget-container__widget"></div>
+      </div>
+    </div>
   </section>
 
+  <!-- ============ TICKER TAPE (COMPACT OVERVIEW) ============ -->
   <section class="panel ticker-panel">
-    <tv-tickers class="tv-tickers" symbols="FOREXCOM:SPXUSD,FOREXCOM:NSXUSD,TVC:GOLD,BITSTAMP:BTCUSD,FX:EURUSD,FRED:DGS10,FRED:VIXCLS" direction="horizontal" item-size="compact" hide-chart theme="dark" transparent locale="de"></tv-tickers>
+    <div class="tradingview-widget-container" id="tv_ticker_tape" style="height:100%;width:100%">
+      <div class="tradingview-widget-container__widget"></div>
+    </div>
   </section>
 
+  <!-- ============ NEWS ============ -->
   <section class="panel news-panel">
-    <div class="panel-title">WICHTIGE NEWS</div>
-    <div class="news-widget-wrap">
-      <div class="tradingview-widget-container" id="tv_news"><div class="tradingview-widget-container__widget"></div></div>
+    <div class="panel-title"><span class="panel-eyebrow">03</span> WICHTIGE NEWS</div>
+    <div class="tv-wrap">
+      <div class="tradingview-widget-container" id="tv_news" style="height:100%;width:100%">
+        <div class="tradingview-widget-container__widget"></div>
+      </div>
     </div>
   </section>
 
+  <!-- ============ ECONOMIC CALENDAR ============ -->
   <section class="panel calendar-panel">
-    <div class="panel-title">NÄCHSTE EVENTS</div>
-    <div class="calendar-widget-wrap">
-      <div class="tradingview-widget-container" id="tv_calendar"><div class="tradingview-widget-container__widget"></div></div>
+    <div class="panel-title"><span class="panel-eyebrow">04</span> NÄCHSTE EVENTS</div>
+    <div class="tv-wrap">
+      <div class="tradingview-widget-container" id="tv_calendar" style="height:100%;width:100%">
+        <div class="tradingview-widget-container__widget"></div>
+      </div>
     </div>
   </section>
+
+  <!-- ============ CONTEXT FOOTER ============ -->
+  <footer class="bar-footer" id="contextBar">
+    <div class="ctx-item">
+      <span class="ctx-label">BTC 24H</span>
+      <span class="ctx-value" id="ctxBtc">…</span>
+    </div>
+    <div class="ctx-sep">│</div>
+    <div class="ctx-item ctx-note" id="ctxNote">Quelle: CoinGecko (ohne Key)</div>
+    <div class="ctx-sep">│</div>
+    <div class="ctx-item ctx-updated">
+      <span class="ctx-label">AKTUALISIERT</span>
+      <span class="ctx-value" id="ctxUpdated">--:--:--</span>
+    </div>
+  </footer>
+
 </div>
-<script src="script.js?v=9"></script>
+
+<script src="script.js?v=3"></script>
 </body>
 </html>
