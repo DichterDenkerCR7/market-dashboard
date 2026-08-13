@@ -39,7 +39,7 @@ function proxyUrl(symbol, range, interval) {
 }
 
 async function fetchYahooChart(symbol, range, interval) {
-  if (!CONFIG.dataProxyBase || CONFIG.dataProxyBase.includes("YOUR-WORKER-URL")) {
+  if (!CONFIG.dataProxyBase || CONFIG.dataProxyBase.includes("https://market-dashboard-proxy.m-atmanspacher1.workers.dev/")) {
     throw new Error("Cloudflare Worker URL fehlt");
   }
   const response = await fetch(proxyUrl(symbol, range, interval), { cache: "no-store" });
