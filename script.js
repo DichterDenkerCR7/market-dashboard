@@ -1,36 +1,22 @@
 /* =====================================================================
    MARKET AWARENESS TERMINAL — script.js
-   No API keys. No backend. No login. Everything below is safe to keep
-   in a public GitHub repository (required for free GitHub Pages).
+   TV-optimierte Version
    ===================================================================== */
 
-/* ---------------------------------------------------------------------
-   1) CONFIG — edit this block to change markets, wording or timing.
-   --------------------------------------------------------------------- */
 const CONFIG = {
-  // Big charts (TradingView "Advanced Chart" symbols)
   chartBtc: "BINANCE:BTCUSDT",
-  // NASDAQ:NDX needs a paid NASDAQ real-time data license and stays blank
-  // in free widgets. FX:NAS100 (FXCM "US 100 Cash CFD") is license-free,
-  // trades near round-the-clock and is the symbol requested by the user.
   chartNdx: "FX:NAS100",
-  chartInterval: "60", // 60 = 1H candles
+  chartInterval: "60",
 
-  // EMA ribbon — equivalent to the requested Fib EMA 21/55/89/144
-  // Pine idea. TradingView widgets cannot load arbitrary Pine scripts,
-  // so we recreate the same four EMAs with the built-in MAExp study.
+  // Vier EMAs entsprechend dem gewünschten Fib EMA 21/55/89/144.
+  // Die Version 60 ist für die MAExp-Studie explizit angegeben.
   emaRibbon: [
-    { length: 21, color: "#FF4D4D" },
-    { length: 55, color: "#FF9F43" },
-    { length: 89, color: "#4DD8FF" },
-    { length: 144, color: "#4D7CFE" }
+    { length: 21, color: "#ff3b30" },
+    { length: 55, color: "#ff9f0a" },
+    { length: 89, color: "#19d3d1" },
+    { length: 144, color: "#356ae6" }
   ],
 
-  // Compact overview strip (TradingView "Ticker Tape" symbols)
-  // NOTE: TVC:VIX / TVC:US10Y can fail to render (licensed Refinitiv/Cboe
-  // feed). FRED:VIXCLS / FRED:DGS10 are official, fully free Fed data —
-  // updates once daily instead of tick-by-tick, which is fine for a
-  // glance-level context strip.
   tickerSymbols: [
     { proName: "FOREXCOM:SPXUSD", title: "S&P 500" },
     { proName: "FOREXCOM:NSXUSD", title: "NASDAQ 100" },
@@ -41,121 +27,131 @@ const CONFIG = {
     { proName: "FRED:VIXCLS",     title: "VIX" }
   ],
 
-  // Economic calendar filter: "-1,0,1" = low+med+high, "0,1" = med+high only
   calendarImportance: "0,1",
   calendarCountries: "us,eu",
 
-  // Market-awareness thresholds (absolute % move, 24h)
   thresholds: {
-    btcElevated: 2.0,   // |BTC 24h %| above this -> elevated
-    btcHigh: 4.0,        // -> high
-    ndxElevated: 1.0,   // |QQQ 24h %| above this -> elevated
+    btcElevated: 2.0,
+    btcHigh: 4.0,
+    ndxElevated: 1.0,
     ndxHigh: 2.0
   },
 
-  // Data refresh + housekeeping
-  priceRefreshMs: 60 * 1000,        // 60s (CoinGecko free limit: ~10-30 req/min)
-  pageReloadMs: 4 * 60 * 60 * 1000  // full reload every 4h to stay fresh & light
+  priceRefreshMs: 60 * 1000,
+  pageReloadMs: 4 * 60 * 60 * 1000
 };
 
 /* ---------------------------------------------------------------------
-   2) TradingView widget embedding helper
+   TradingView Widget Helper
    --------------------------------------------------------------------- */
 function embedTVWidget(containerId, scriptSrc, config) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  const target = container.querySelector(".tradingview-widget-container__widget") || container;
+
   const script = document.createElement("script");
   script.type = "text/javascript";
   script.src = scriptSrc;
   script.async = true;
   script.text = JSON.stringify(config);
   container.appendChild(script);
-  void target; // container-level append matches TradingView's own embed pattern
+}
+
+function createEmaStudies() {
+  return CONFIG.emaRibbon.map((ema) => ({
+    id: "MAExp@tv-basicstudies",
+    version: 60,
+    inputs: {
+      length: ema.length,
+      source: "close"
+    }
+  }));
+}
+
+function createEmaOverrides() {
+  return {
+    // Für mehrere Instanzen derselben Studie werden die einzelnen Plots
+    // explizit angesprochen. Falls die Widget-Version diese Index-Overrides
+    // nicht übernimmt, bleiben die EMAs trotzdem sichtbar.
+    "moving average exponential.0.plot.color": CONFIG.emaRibbon[0].color,
+    "moving average exponential.1.plot.color": CONFIG.emaRibbon[1].color,
+    "moving average exponential.2.plot.color": CONFIG.emaRibbon[2].color,
+    "moving average exponential.3.plot.color": CONFIG.emaRibbon[3].color,
+
+    "moving average exponential.0.plot.linewidth": 2,
+    "moving average exponential.1.plot.linewidth": 2,
+    "moving average exponential.2.plot.linewidth": 2,
+    "moving average exponential.3.plot.linewidth": 2,
+
+    // Fallback für Widget-Versionen, die den gemeinsamen EMA-Stil verwenden.
+    "moving average exponential.ma.linewidth": 2
+  };
+}
+
+function baseChartConfig(symbol) {
+  return {
+    autosize: true,
+    symbol,
+    interval: CONFIG.chartInterval,
+    timezone: "Europe/Berlin",
+    theme: "dark",
+    style: "1",
+    locale: "de_DE",
+    hide_top_toolbar: true,
+    hide_legend: false,
+    hide_volume: true,
+    withdateranges: false,
+    allow_symbol_change: false,
+    save_image: false,
+    calendar: false,
+    backgroundColor: "#0e141b",
+    gridColor: "#202a35",
+    studies: createEmaStudies(),
+    studies_overrides: createEmaOverrides(),
+
+    // Erzwingt zusätzlich einen dunklen Chart-Hintergrund.
+    overrides: {
+      "paneProperties.background": "#0e141b",
+      "paneProperties.backgroundType": "solid",
+      "paneProperties.vertGridProperties.color": "#18212b",
+      "paneProperties.horzGridProperties.color": "#18212b",
+      "scalesProperties.textColor": "#8f9aaa",
+      "scalesProperties.lineColor": "#2a3440",
+      "mainSeriesProperties.candleStyle.upColor": "#26a69a",
+      "mainSeriesProperties.candleStyle.downColor": "#ef5350",
+      "mainSeriesProperties.candleStyle.borderUpColor": "#26a69a",
+      "mainSeriesProperties.candleStyle.borderDownColor": "#ef5350",
+      "mainSeriesProperties.candleStyle.wickUpColor": "#26a69a",
+      "mainSeriesProperties.candleStyle.wickDownColor": "#ef5350"
+    }
+  };
 }
 
 function initWidgets() {
-  // Big chart: Bitcoin + EMA 21 / 55 / 89 / 144
-  embedTVWidget("tv_btc_chart", "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", {
-    autosize: true,
-    symbol: CONFIG.chartBtc,
-    interval: CONFIG.chartInterval,
-    timezone: "Etc/UTC",
-    theme: "dark",
-    style: "1",
-    locale: "de_DE",
-    hide_top_toolbar: true,
-    hide_legend: false,
-    hide_volume: true,
-    withdateranges: false,
-    allow_symbol_change: false,
-    save_image: false,
-    calendar: false,
-    backgroundColor: "rgba(16,21,28,1)",
-    gridColor: "rgba(33,41,52,0.5)",
-    studies: CONFIG.emaRibbon.map((ema) => ({
-      id: "MAExp@tv-basicstudies",
-      version: 60,
-      inputs: { length: ema.length }
-    })),
-    studies_overrides: {
-      "moving average exponential.0.plot.color": CONFIG.emaRibbon[0].color,
-      "moving average exponential.1.plot.color": CONFIG.emaRibbon[1].color,
-      "moving average exponential.2.plot.color": CONFIG.emaRibbon[2].color,
-      "moving average exponential.3.plot.color": CONFIG.emaRibbon[3].color,
-      "moving average exponential.0.plot.linewidth": 2,
-      "moving average exponential.1.plot.linewidth": 2,
-      "moving average exponential.2.plot.linewidth": 2,
-      "moving average exponential.3.plot.linewidth": 2
-    }
-  });
+  // Bitcoin Chart + EMA 21/55/89/144
+  embedTVWidget(
+    "tv_btc_chart",
+    "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js",
+    baseChartConfig(CONFIG.chartBtc)
+  );
 
-  // Big chart: Nasdaq 100 + EMA 21 / 55 / 89 / 144
-  embedTVWidget("tv_ndx_chart", "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", {
-    autosize: true,
-    symbol: CONFIG.chartNdx,
-    interval: CONFIG.chartInterval,
-    timezone: "Etc/UTC",
-    theme: "dark",
-    style: "1",
-    locale: "de_DE",
-    hide_top_toolbar: true,
-    hide_legend: false,
-    hide_volume: true,
-    withdateranges: false,
-    allow_symbol_change: false,
-    save_image: false,
-    calendar: false,
-    backgroundColor: "rgba(16,21,28,1)",
-    gridColor: "rgba(33,41,52,0.5)",
-    studies: CONFIG.emaRibbon.map((ema) => ({
-      id: "MAExp@tv-basicstudies",
-      version: 60,
-      inputs: { length: ema.length }
-    })),
-    studies_overrides: {
-      "moving average exponential.0.plot.color": CONFIG.emaRibbon[0].color,
-      "moving average exponential.1.plot.color": CONFIG.emaRibbon[1].color,
-      "moving average exponential.2.plot.color": CONFIG.emaRibbon[2].color,
-      "moving average exponential.3.plot.color": CONFIG.emaRibbon[3].color,
-      "moving average exponential.0.plot.linewidth": 2,
-      "moving average exponential.1.plot.linewidth": 2,
-      "moving average exponential.2.plot.linewidth": 2,
-      "moving average exponential.3.plot.linewidth": 2
-    }
-  });
+  // Nasdaq 100 Chart + EMA 21/55/89/144
+  embedTVWidget(
+    "tv_ndx_chart",
+    "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js",
+    baseChartConfig(CONFIG.chartNdx)
+  );
 
-  // Compact overview strip
+  // Kompakter Markt-Ticker
   embedTVWidget("tv_ticker_tape", "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js", {
     symbols: CONFIG.tickerSymbols,
     showSymbolLogo: false,
     isTransparent: false,
-    displayMode: "adaptive",
+    displayMode: "compact",
     colorTheme: "dark",
     locale: "de_DE"
   });
 
-  // News (TradingView "Top Stories")
+  // News
   embedTVWidget("tv_news", "https://s3.tradingview.com/external-embedding/embed-widget-timeline.js", {
     feedMode: "all_symbols",
     isTransparent: true,
@@ -166,7 +162,7 @@ function initWidgets() {
     locale: "de_DE"
   });
 
-  // Economic calendar
+  // Wirtschaftskalender
   embedTVWidget("tv_calendar", "https://s3.tradingview.com/external-embedding/embed-widget-events.js", {
     width: "100%",
     height: "100%",
@@ -179,21 +175,12 @@ function initWidgets() {
 }
 
 /* ---------------------------------------------------------------------
-   3) Clock
+   Datum + Uhrzeit
    --------------------------------------------------------------------- */
-function updateClock() {
+function updateDateTime() {
   const now = new Date();
-  const clockEl = document.getElementById("clock");
+
   const dateEl = document.getElementById("date");
-
-  if (clockEl) {
-    clockEl.textContent = now.toLocaleTimeString("de-DE", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-  }
-
   if (dateEl) {
     dateEl.textContent = now.toLocaleDateString("de-DE", {
       day: "2-digit",
@@ -201,19 +188,22 @@ function updateClock() {
       year: "numeric"
     });
   }
+
+  const clockEl = document.getElementById("clock");
+  if (clockEl) {
+    clockEl.textContent = now.toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }
 }
 
 /* ---------------------------------------------------------------------
-   4) Market Awareness — keyless, best-effort, never throws
+   Market Awareness
    --------------------------------------------------------------------- */
 const marketState = {
   btcChangePct: null,
-  // Nasdaq live % is intentionally NOT fetched here: every free, keyless,
-  // CORS-enabled equity API we could use (Yahoo Finance et al.) blocks
-  // browser-side requests. Rather than call it and hide the console error,
-  // we skip it entirely — the Nasdaq ticker-tape item and the big NQ1!
-  // chart already give a live visual read. Per Abschnitt 5: vereinfachen
-  // statt eine unzuverlässige Kennzahl vortäuschen.
   ndxChangePct: null,
   lastUpdate: null
 };
@@ -221,14 +211,14 @@ const marketState = {
 async function fetchBtcChange() {
   try {
     const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true",
+      { cache: "no-store" }
     );
     if (!res.ok) throw new Error("CoinGecko HTTP " + res.status);
+
     const data = await res.json();
-    const pct = data && data.bitcoin && typeof data.bitcoin.usd_24h_change === "number"
-      ? data.bitcoin.usd_24h_change
-      : null;
-    marketState.btcChangePct = pct;
+    const pct = data?.bitcoin?.usd_24h_change;
+    marketState.btcChangePct = typeof pct === "number" ? pct : null;
   } catch (err) {
     marketState.btcChangePct = null;
     console.warn("BTC-Daten aktuell nicht verfügbar:", err.message);
@@ -245,20 +235,27 @@ function computeStatus() {
   const { btcChangePct, ndxChangePct } = marketState;
   const t = CONFIG.thresholds;
 
-  let level = "normal"; // normal | elevated | high
-  let reasons = [];
+  let level = "normal";
+  const reasons = [];
 
   if (btcChangePct !== null) {
     const abs = Math.abs(btcChangePct);
-    if (abs >= t.btcHigh) { level = "high"; reasons.push("BTC " + fmtPct(btcChangePct)); }
-    else if (abs >= t.btcElevated && level !== "high") { level = "elevated"; reasons.push("BTC " + fmtPct(btcChangePct)); }
+    if (abs >= t.btcHigh) {
+      level = "high";
+      reasons.push("BTC " + fmtPct(btcChangePct));
+    } else if (abs >= t.btcElevated && level !== "high") {
+      level = "elevated";
+      reasons.push("BTC " + fmtPct(btcChangePct));
+    }
   }
 
   if (ndxChangePct !== null) {
     const abs = Math.abs(ndxChangePct);
-    if (abs >= t.ndxHigh) { level = "high"; reasons.push("NASDAQ " + fmtPct(ndxChangePct)); }
-    else if (abs >= t.ndxElevated && level !== "high") {
-      level = level === "high" ? "high" : "elevated";
+    if (abs >= t.ndxHigh) {
+      level = "high";
+      reasons.push("NASDAQ " + fmtPct(ndxChangePct));
+    } else if (abs >= t.ndxElevated && level !== "high") {
+      level = "elevated";
       reasons.push("NASDAQ " + fmtPct(ndxChangePct));
     }
   }
@@ -277,28 +274,11 @@ function renderStatus() {
 
   const dot = document.getElementById("statusDot");
   const label = document.getElementById("statusLabel");
+
   if (dot && label) {
     dot.className = "status-dot " + level;
     label.className = "status-label " + level;
     label.textContent = STATUS_LABELS[level];
-  }
-
-  const ctxBtc = document.getElementById("ctxBtc");
-  if (ctxBtc) {
-    ctxBtc.textContent = fmtPct(marketState.btcChangePct);
-    ctxBtc.className = "ctx-value " + (marketState.btcChangePct > 0 ? "up" : marketState.btcChangePct < 0 ? "down" : "");
-  }
-
-  const ctxNote = document.getElementById("ctxNote");
-  if (ctxNote) {
-    ctxNote.textContent = "Status basiert auf BTC 24h (CoinGecko, ohne Key) · NASDAQ-Bewegung: siehe Chart/Ticker oben";
-  }
-
-  const ctxUpdated = document.getElementById("ctxUpdated");
-  if (ctxUpdated) {
-    ctxUpdated.textContent = marketState.lastUpdate
-      ? marketState.lastUpdate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-      : "--:--:--";
   }
 }
 
@@ -309,18 +289,17 @@ async function refreshMarketAwareness() {
 }
 
 /* ---------------------------------------------------------------------
-   5) Boot
+   Boot
    --------------------------------------------------------------------- */
 function boot() {
   initWidgets();
 
-  updateClock();
-  setInterval(updateClock, 1000);
+  updateDateTime();
+  setInterval(updateDateTime, 1000);
 
   refreshMarketAwareness();
   setInterval(refreshMarketAwareness, CONFIG.priceRefreshMs);
 
-  // Keep a TV kiosk session healthy over many hours.
   setTimeout(() => window.location.reload(), CONFIG.pageReloadMs);
 }
 

@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#090c10">
 <title>Market Awareness // Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
 <div class="grid">
 
-  <!-- ============ COMPACT TOP BAR ============ -->
+  <!-- Kompakte Kopfzeile -->
   <header class="bar-header">
     <div class="date" id="date">--.--.----</div>
     <div class="status-readout" id="statusReadout">
@@ -23,9 +24,12 @@
     <div class="clock" id="clock">--:--:--</div>
   </header>
 
-  <!-- ============ BIG CHART: BITCOIN ============ -->
+  <!-- Bitcoin -->
   <section class="panel chart-panel" id="panelBtc">
-    <div class="panel-title">BITCOIN <span class="panel-sub">BTC / USD · 21 / 55 / 89 / 144 EMA</span></div>
+    <div class="panel-title">
+      <span>BITCOIN</span>
+      <span class="panel-sub">BTC / USD · EMA 21 / 55 / 89 / 144</span>
+    </div>
     <div class="tv-wrap">
       <div class="tradingview-widget-container" id="tv_btc_chart" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
@@ -33,9 +37,12 @@
     </div>
   </section>
 
-  <!-- ============ BIG CHART: NASDAQ 100 ============ -->
+  <!-- Nasdaq 100 -->
   <section class="panel chart-panel" id="panelNdx">
-    <div class="panel-title">NASDAQ 100 <span class="panel-sub">US 100 CASH · 21 / 55 / 89 / 144 EMA</span></div>
+    <div class="panel-title">
+      <span>NASDAQ 100</span>
+      <span class="panel-sub">US 100 CASH · EMA 21 / 55 / 89 / 144</span>
+    </div>
     <div class="tv-wrap">
       <div class="tradingview-widget-container" id="tv_ndx_chart" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
@@ -43,27 +50,27 @@
     </div>
   </section>
 
-  <!-- ============ TICKER TAPE ============ -->
+  <!-- Marktübersicht -->
   <section class="panel ticker-panel">
     <div class="tradingview-widget-container" id="tv_ticker_tape" style="height:100%;width:100%">
       <div class="tradingview-widget-container__widget"></div>
     </div>
   </section>
 
-  <!-- ============ NEWS ============ -->
+  <!-- News -->
   <section class="panel news-panel">
     <div class="panel-title">WICHTIGE NEWS</div>
-    <div class="tv-wrap large-text-widget">
+    <div class="tv-wrap news-widget-wrap">
       <div class="tradingview-widget-container" id="tv_news" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
       </div>
     </div>
   </section>
 
-  <!-- ============ ECONOMIC CALENDAR ============ -->
+  <!-- Wirtschaftstermine -->
   <section class="panel calendar-panel">
     <div class="panel-title">NÄCHSTE EVENTS</div>
-    <div class="tv-wrap large-text-widget">
+    <div class="tv-wrap calendar-widget-wrap">
       <div class="tradingview-widget-container" id="tv_calendar" style="height:100%;width:100%">
         <div class="tradingview-widget-container__widget"></div>
       </div>
@@ -72,6 +79,6 @@
 
 </div>
 
-<script src="script.js?v=5"></script>
+<script src="script.js?v=6"></script>
 </body>
 </html>
