@@ -72,14 +72,15 @@ const CONFIG = {
    thousands of trading tools for years) — free, keyless, no login.
    --------------------------------------------------------------------- */
 const CALENDAR_CONFIG = {
-  ffUrls: [
-    "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
-    "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
-  ],
-  ccUrls: [
-    "https://nfs.faireconomy.media/cc_calendar_thisweek.xml",
-    "https://nfs.faireconomy.media/cc_calendar_nextweek.xml"
-  ],
+  ffThisWeek: "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+  ffNextWeek: "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
+  ccThisWeek: "https://nfs.faireconomy.media/cc_calendar_thisweek.xml",
+  ccNextWeek: "https://nfs.faireconomy.media/cc_calendar_nextweek.xml",
+  // Only fetch the "nextweek" file if "thisweek" doesn't leave us with at
+  // least this many upcoming rows — nextweek 404s until FairEconomy
+  // publishes it (usually from Friday on), so fetching it unconditionally
+  // just burns proxy/rate-limit budget for nothing most of the week.
+  minFutureBeforeTopUp: 4,
   fxCountries: ["USD", "EUR", "GBP"],
   refetchMs: 30 * 60 * 1000, // 30 min — well under FairEconomy's rate limit
   maxRows: 8
@@ -432,14 +433,8 @@ function normalizeEventTitle(title) {
   return title.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-async function fetchForexFactoryEvents() {
-  const results = await Promise.allSettled(CALENDAR_CONFIG.ffUrls.map(fetchTextViaProxies));
-  const all = [];
-  for (const r of results) {
-    if (r.status !== "fulfilled") { console.warn("FF-Feed nicht erreichbar:", r.reason?.message); continue; }
-    try { all.push(...JSON.parse(r.value)); } catch (e) { console.warn("FF-Feed: unerwartete Antwort (kein JSON):", e.message); }
-  }
-  return all
+function parseFfJson(text) {
+  return JSON.parse(text)
     .filter((e) => CALENDAR_CONFIG.fxCountries.includes(e.country))
     .filter((e) => e.impact === "Medium" || e.impact === "High")
     .map((e) => ({
@@ -450,6 +445,27 @@ async function fetchForexFactoryEvents() {
       fx: IMPACT_STARS[e.impact] || 0
     }))
     .filter((e) => Number.isFinite(e.utc));
+}
+
+async function fetchForexFactoryEvents() {
+  let events = [];
+  try {
+    const text = await fetchTextViaProxies(CALENDAR_CONFIG.ffThisWeek);
+    events = parseFfJson(text);
+  } catch (err) {
+    console.warn("FF thisweek nicht erreichbar:", err.message);
+  }
+
+  const futureCount = events.filter((e) => e.utc > Date.now()).length;
+  if (futureCount < CALENDAR_CONFIG.minFutureBeforeTopUp) {
+    try {
+      const text = await fetchTextViaProxies(CALENDAR_CONFIG.ffNextWeek);
+      events = events.concat(parseFfJson(text));
+    } catch (err) {
+      // nextweek not published yet (common mid-week) — not an error, just no top-up
+    }
+  }
+  return events;
 }
 
 function parseCcDateTimeToUtc(dateStr, timeStr) {
@@ -464,16 +480,10 @@ function parseCcDateTimeToUtc(dateStr, timeStr) {
   return Date.UTC(yyyy, mm - 1, dd, hour, minute);
 }
 
-async function fetchCryptoCraftEvents() {
-  const results = await Promise.allSettled(CALENDAR_CONFIG.ccUrls.map(fetchTextViaProxies));
-  const all = [];
-  for (const r of results) {
-    if (r.status !== "fulfilled") { console.warn("CC-Feed nicht erreichbar:", r.reason?.message); continue; }
-    const doc = new DOMParser().parseFromString(r.value, "text/xml");
-    if (doc.querySelector("parsererror")) { console.warn("CC-Feed: unerwartete Antwort (kein XML)"); continue; }
-    all.push(...Array.from(doc.querySelectorAll("event")));
-  }
-  return all.map((ev) => {
+function parseCcXml(text) {
+  const doc = new DOMParser().parseFromString(text, "text/xml");
+  if (doc.querySelector("parsererror")) throw new Error("unerwartete Antwort (kein XML)");
+  return Array.from(doc.querySelectorAll("event")).map((ev) => {
     const title = ev.querySelector("title")?.textContent || "";
     const country = ev.querySelector("country")?.textContent || "";
     const dateStr = ev.querySelector("date")?.textContent || "";
@@ -482,6 +492,27 @@ async function fetchCryptoCraftEvents() {
     const utc = parseCcDateTimeToUtc(dateStr, timeStr);
     return { key: normalizeEventTitle(title), utc, name: title, country, crypto: IMPACT_STARS[impact] || 0 };
   }).filter((e) => e.utc !== null);
+}
+
+async function fetchCryptoCraftEvents() {
+  let events = [];
+  try {
+    const text = await fetchTextViaProxies(CALENDAR_CONFIG.ccThisWeek);
+    events = parseCcXml(text);
+  } catch (err) {
+    console.warn("CC thisweek nicht erreichbar:", err.message);
+  }
+
+  const futureCount = events.filter((e) => e.utc > Date.now()).length;
+  if (futureCount < CALENDAR_CONFIG.minFutureBeforeTopUp) {
+    try {
+      const text = await fetchTextViaProxies(CALENDAR_CONFIG.ccNextWeek);
+      events = events.concat(parseCcXml(text));
+    } catch (err) {
+      // nextweek not published yet (common mid-week) — not an error, just no top-up
+    }
+  }
+  return events;
 }
 
 async function refreshEventsCalendar() {
