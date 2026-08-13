@@ -8,77 +8,46 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=8">
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-tickers.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-
 <div class="grid">
-
-  <!-- Kompakte Kopfzeile -->
   <header class="bar-header">
     <div class="date" id="date">--.--.----</div>
-    <div class="status-readout" id="statusReadout">
-      <span class="status-dot" id="statusDot"></span>
-      <span class="status-label" id="statusLabel">LÄDT…</span>
-    </div>
+    <div class="status-readout"><span class="status-dot" id="statusDot"></span><span class="status-label" id="statusLabel">LÄDT…</span></div>
     <div class="clock" id="clock">--:--:--</div>
   </header>
 
-  <!-- Bitcoin -->
   <section class="panel chart-panel" id="panelBtc">
-    <div class="panel-title">
-      <span>BITCOIN</span>
-      <span class="panel-sub">BTC / USD · EMA 21 / 55 / 89 / 144</span>
-    </div>
-    <div class="tv-wrap">
-      <div class="tradingview-widget-container" id="tv_btc_chart" style="height:100%;width:100%">
-        <div class="tradingview-widget-container__widget"></div>
-      </div>
-    </div>
+    <div class="panel-title"><span>BITCOIN</span><span class="panel-sub">BTC / USD · EMA 21 / 55 / 89 / 144</span></div>
+    <div class="chart-host" id="btcChart"></div>
   </section>
 
-  <!-- Nasdaq 100 -->
   <section class="panel chart-panel" id="panelNdx">
-    <div class="panel-title">
-      <span>NASDAQ 100</span>
-      <span class="panel-sub">US 100 CASH · EMA 21 / 55 / 89 / 144</span>
-    </div>
-    <div class="tv-wrap">
-      <div class="tradingview-widget-container" id="tv_ndx_chart" style="height:100%;width:100%">
-        <div class="tradingview-widget-container__widget"></div>
-      </div>
-    </div>
+    <div class="panel-title"><span>NASDAQ 100</span><span class="panel-sub">NASDAQ 100 · EMA 21 / 55 / 89 / 144</span></div>
+    <div class="chart-host" id="ndxChart"></div>
   </section>
 
-  <!-- Marktübersicht -->
   <section class="panel ticker-panel">
-    <div class="tradingview-widget-container" id="tv_ticker_tape" style="height:100%;width:100%">
-      <div class="tradingview-widget-container__widget"></div>
-    </div>
+    <tv-tickers class="tv-tickers" symbols="FOREXCOM:SPXUSD,FOREXCOM:NSXUSD,TVC:GOLD,BITSTAMP:BTCUSD,FX:EURUSD,FRED:DGS10,FRED:VIXCLS" direction="horizontal" item-size="compact" hide-chart theme="dark" transparent locale="de"></tv-tickers>
   </section>
 
-  <!-- News -->
   <section class="panel news-panel">
     <div class="panel-title">WICHTIGE NEWS</div>
-    <div class="tv-wrap news-widget-wrap">
-      <div class="tradingview-widget-container" id="tv_news" style="height:100%;width:100%">
-        <div class="tradingview-widget-container__widget"></div>
-      </div>
+    <div class="news-widget-wrap">
+      <div class="tradingview-widget-container" id="tv_news"><div class="tradingview-widget-container__widget"></div></div>
     </div>
   </section>
 
-  <!-- Wirtschaftstermine -->
   <section class="panel calendar-panel">
     <div class="panel-title">NÄCHSTE EVENTS</div>
-    <div class="tv-wrap calendar-widget-wrap">
-      <div class="tradingview-widget-container" id="tv_calendar" style="height:100%;width:100%">
-        <div class="tradingview-widget-container__widget"></div>
-      </div>
+    <div class="calendar-widget-wrap">
+      <div class="tradingview-widget-container" id="tv_calendar"><div class="tradingview-widget-container__widget"></div></div>
     </div>
   </section>
-
 </div>
-
-<script src="script.js?v=6"></script>
+<script src="script.js?v=8"></script>
 </body>
 </html>
