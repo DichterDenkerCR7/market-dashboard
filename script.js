@@ -59,43 +59,48 @@ const CONFIG = {
 };
 
 /* ---------------------------------------------------------------------
-   1b) Known macro calendar — FOMC, ECB, US CPI, US NFP (rest of 2026)
+   1b) Events calendar config — ForexFactory (FX importance) + CryptoCraft
+   (crypto importance), same underlying event set, independently rated
+   per audience by FairEconomy (the company running both sites).
    ---------------------------------------------------------------------
-   Why hand-curated instead of a widget: the free TradingView Events
-   widget always ships Actual/Forecast/Prior columns and full-size flag
-   icons — there's no documented option to strip those, since it's a
-   cross-origin iframe we can't restyle. FOMC/ECB meeting dates and US
-   BLS release dates are published by the Fed/ECB/BLS *months in advance*
-   on a fixed schedule, so hand-entering them is both accurate and low
-   maintenance (a few new rows, twice a year).
-   Sources (checked Aug 2026): federalreserve.gov meeting calendar,
-   ecb.europa.eu Governing Council calendar, bls.gov/schedule.
-   Dates below are stored as UTC instants (Date.UTC) computed from each
-   institution's published local time + that date's correct DST offset,
-   so the dashboard just renders them in the browser's local time —
-   same pattern as the clock elsewhere on this page.
-   To add next year's dates: append rows in the same format once the
-   institutions publish their next calendar (typically ~August for the
-   following year).
+   Only "Medium" (orange) and "High" (red) impact events are kept, only
+   for USD/EUR/GBP on the FX side. An event is shown if EITHER side rates
+   it Medium+ — e.g. "US Core CPI" is High on both sites -> 3 bitcoin +
+   3 banknote emoji; something High for USD but only Medium on
+   CryptoCraft still shows, just with fewer bitcoin emoji.
+   Endpoints are FairEconomy's public weekly export files (used by
+   thousands of trading tools for years) — free, keyless, no login.
    --------------------------------------------------------------------- */
-const KNOWN_EVENTS = [
-  { utc: Date.UTC(2026, 8, 4, 12, 30),  name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 8, 10, 12, 15), name: "EZB Zinsentscheid",            country: "eu", importance: 3 },
-  { utc: Date.UTC(2026, 8, 11, 12, 30), name: "US CPI (Inflation)",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 8, 16, 18, 0),  name: "FOMC Zinsentscheid",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 9, 2, 12, 30),  name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 9, 14, 12, 30), name: "US CPI (Inflation)",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 9, 28, 18, 0),  name: "FOMC Zinsentscheid",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 9, 29, 13, 15), name: "EZB Zinsentscheid",            country: "eu", importance: 3 },
-  { utc: Date.UTC(2026, 10, 6, 13, 30), name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 10, 10, 13, 30),name: "US CPI (Inflation)",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 11, 4, 13, 30), name: "US Arbeitsmarktbericht (NFP)", country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 11, 9, 19, 0),  name: "FOMC Zinsentscheid",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 11, 10, 13, 30),name: "US CPI (Inflation)",           country: "us", importance: 3 },
-  { utc: Date.UTC(2026, 11, 17, 13, 15),name: "EZB Zinsentscheid",            country: "eu", importance: 3 }
-];
+const CALENDAR_CONFIG = {
+  ffUrl: "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+  ccUrl: "https://nfs.faireconomy.media/cc_calendar_thisweek.xml",
+  fxCountries: ["USD", "EUR", "GBP"],
+  refetchMs: 30 * 60 * 1000, // 30 min — well under FairEconomy's rate limit
+  maxRows: 8
+};
 
-const EVENT_FLAGS = { us: "🇺🇸", eu: "🇪🇺" };
+const EVENT_FLAGS = { USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧" };
+const IMPACT_STARS = { Low: 1, Medium: 2, High: 3 };
+
+// Offline fallback (only used if both live feeds fail): the previously
+// hand-curated FOMC/ECB/CPI/NFP dates for the rest of 2026. fx/crypto
+// star counts here are reasonable fixed approximations, not live data.
+const FALLBACK_EVENTS = [
+  { utc: Date.UTC(2026, 8, 4, 12, 30),  name: "US Arbeitsmarktbericht (NFP)", country: "USD", fx: 3, crypto: 2 },
+  { utc: Date.UTC(2026, 8, 10, 12, 15), name: "EZB Zinsentscheid",            country: "EUR", fx: 3, crypto: 1 },
+  { utc: Date.UTC(2026, 8, 11, 12, 30), name: "US CPI (Inflation)",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 8, 16, 18, 0),  name: "FOMC Zinsentscheid",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 9, 2, 12, 30),  name: "US Arbeitsmarktbericht (NFP)", country: "USD", fx: 3, crypto: 2 },
+  { utc: Date.UTC(2026, 9, 14, 12, 30), name: "US CPI (Inflation)",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 9, 28, 18, 0),  name: "FOMC Zinsentscheid",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 9, 29, 13, 15), name: "EZB Zinsentscheid",            country: "EUR", fx: 3, crypto: 1 },
+  { utc: Date.UTC(2026, 10, 6, 13, 30), name: "US Arbeitsmarktbericht (NFP)", country: "USD", fx: 3, crypto: 2 },
+  { utc: Date.UTC(2026, 10, 10, 13, 30),name: "US CPI (Inflation)",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 11, 4, 13, 30), name: "US Arbeitsmarktbericht (NFP)", country: "USD", fx: 3, crypto: 2 },
+  { utc: Date.UTC(2026, 11, 9, 19, 0),  name: "FOMC Zinsentscheid",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 11, 10, 13, 30),name: "US CPI (Inflation)",           country: "USD", fx: 3, crypto: 3 },
+  { utc: Date.UTC(2026, 11, 17, 13, 15),name: "EZB Zinsentscheid",            country: "EUR", fx: 3, crypto: 1 }
+];
 
 /* ---------------------------------------------------------------------
    2) TradingView widget embedding helper
@@ -182,9 +187,8 @@ function initWidgets() {
   // News: handled separately by the custom headline rotator (see
   // initNewsRotator below) — not a TradingView widget, see explanation there.
 
-  // Economic calendar: handled by the custom KNOWN_EVENTS list (see
-  // renderEventsCalendar below) — not a TradingView widget, see comment
-  // on KNOWN_EVENTS for why.
+  // Economic calendar: handled by refreshEventsCalendar() further down —
+  // fetches live ForexFactory + CryptoCraft feeds, not a TradingView widget.
 }
 
 /* ---------------------------------------------------------------------
@@ -203,6 +207,35 @@ function updateClock() {
 }
 
 /* ---------------------------------------------------------------------
+   1c) Shared CORS-proxy chain — used by News and by the Events calendar.
+   Three free, keyless proxies tried in order; corsproxy.io explicitly
+   whitelists *.github.io on its free tier, which is where this
+   dashboard is hosted, so it goes first.
+   --------------------------------------------------------------------- */
+const CORS_PROXIES = [
+  (url) => "https://corsproxy.io/?url=" + encodeURIComponent(url),
+  (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
+  (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)
+];
+
+async function fetchTextViaProxies(url) {
+  let lastError = null;
+  for (const buildProxyUrl of CORS_PROXIES) {
+    try {
+      const res = await fetch(buildProxyUrl(url));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const text = await res.text();
+      if (!text || text.length < 5) throw new Error("leere Antwort");
+      return text;
+    } catch (err) {
+      lastError = err;
+      // try the next proxy in the chain
+    }
+  }
+  throw lastError || new Error("Alle Proxys fehlgeschlagen");
+}
+
+/* ---------------------------------------------------------------------
    3b) News Rotator — one full headline at a time, no TradingView widget
    ---------------------------------------------------------------------
    Why this exists: TradingView's News widget runs inside a cross-origin
@@ -210,32 +243,33 @@ function updateClock() {
    Stories" header, or control its rotation from our own JS — that's a
    hard browser security boundary, not a setting we missed. To get an
    actual "one full headline for 15s, then the next" ticker with real
-   data, we instead pull two CNBC RSS feeds directly (Markets + Investing)
-   through a free, keyless CORS proxy (api.allorigins.win) and rotate
-   through them ourselves.
-   Trade-off to know about: api.allorigins.win is a free third-party
-   proxy, not something TradingView or CNBC guarantees — if it's ever
-   down, the panel shows a short "nicht verfügbar" message instead of
-   breaking the page, and retries on the next refresh cycle.
+   data, we pull RSS feeds directly (finance + crypto) through the free
+   CORS-proxy chain above and rotate through them ourselves.
+   A simple keyword filter (CONFIG.newsKeywords) acts as the "internal
+   scoring system" — a headline only makes it into the rotation if it
+   contains at least one market-moving keyword. Fully controlled from
+   this file, no external scoring service.
    --------------------------------------------------------------------- */
 const NEWS_CONFIG = {
   feeds: [
     "https://www.cnbc.com/id/15838459/device/rss/rss.html", // CNBC Markets
-    "https://www.cnbc.com/id/19794221/device/rss/rss.html"  // CNBC Investing
+    "https://www.cnbc.com/id/19794221/device/rss/rss.html", // CNBC Investing
+    "https://cointelegraph.com/rss"                          // Crypto news
   ],
-  // Fallback chain: api.allorigins.win alone turned out to fail roughly
-  // half the time (a known, documented issue with that free service) —
-  // so we now try three free, keyless proxies in order and use whichever
-  // answers first. corsproxy.io explicitly whitelists *.github.io on its
-  // free tier, which is exactly where this dashboard is hosted.
-  corsProxies: [
-    (url) => "https://corsproxy.io/?url=" + encodeURIComponent(url),
-    (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
-    (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)
+  // Headline must contain at least one of these (case-insensitive) to be
+  // considered "important" — add/remove freely.
+  keywords: [
+    "fed", "fomc", "powell", "zins", "rate", "inflat", "cpi", "pce",
+    "ecb", "ezb", "lagarde", "jobs", "payroll", "nfp", "unemployment",
+    "gdp", "recession", "tariff", "zoll", "bitcoin", "btc", "crypto",
+    "krypto", "ethereum", "eth", "etf", "sec", "regulat", "hack",
+    "crash", "rally", "surge", "plunge", "selloff", "sell-off",
+    "nasdaq", "s&p", "stocks", "aktien", "yield", "bond", "treasury",
+    "dollar", "euro"
   ],
   rotateMs: 15 * 1000,      // one full headline visible for 15s
   refetchMs: 10 * 60 * 1000, // pull fresh headlines every 10 min
-  maxItems: 25
+  maxItems: 30
 };
 
 const newsState = {
@@ -257,21 +291,13 @@ function parseRssItems(xmlText, fallbackSource) {
 }
 
 async function fetchNewsFeed(url) {
-  let lastError = null;
-  for (const buildProxyUrl of NEWS_CONFIG.corsProxies) {
-    try {
-      const res = await fetch(buildProxyUrl(url));
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const text = await res.text();
-      const items = parseRssItems(text, "CNBC");
-      if (items.length > 0) return items;
-      throw new Error("leere Antwort");
-    } catch (err) {
-      lastError = err;
-      // try the next proxy in the chain
-    }
-  }
-  throw lastError || new Error("Alle Proxys fehlgeschlagen");
+  const text = await fetchTextViaProxies(url);
+  return parseRssItems(text, "News");
+}
+
+function isImportantHeadline(title) {
+  const t = title.toLowerCase();
+  return NEWS_CONFIG.keywords.some((kw) => t.includes(kw));
 }
 
 async function refreshNewsFeeds() {
@@ -283,13 +309,12 @@ async function refreshNewsFeeds() {
       if (r.status !== "fulfilled") continue;
       for (const item of r.value) {
         if (seenTitles.has(item.title)) continue;
+        if (!isImportantHeadline(item.title)) continue; // keyword filter
         seenTitles.add(item.title);
         merged.push(item);
       }
     }
     if (merged.length === 0) {
-      // Every feed failed (proxy down, network, etc.) — keep any
-      // previously loaded items so the rotation doesn't go blank.
       if (newsState.items.length === 0) renderNewsUnavailable();
       return;
     }
@@ -297,10 +322,19 @@ async function refreshNewsFeeds() {
     newsState.items = merged.slice(0, NEWS_CONFIG.maxItems);
     if (newsState.index >= newsState.items.length) newsState.index = 0;
     renderCurrentHeadline();
+    renderNewsCount();
   } catch (err) {
     if (newsState.items.length === 0) renderNewsUnavailable();
     console.warn("News-Feeds aktuell nicht verfügbar:", err.message);
   }
+}
+
+function renderNewsCount() {
+  const el = document.getElementById("newsCount");
+  if (!el) return;
+  const weekAgo = Date.now() - 7 * 86400000;
+  const count = newsState.items.filter((it) => it.pubDate && it.pubDate.getTime() >= weekAgo).length;
+  el.textContent = count > 0 ? "📰 " + count + " diese Woche" : "";
 }
 
 function relativeTimeDe(date) {
@@ -347,8 +381,10 @@ function initNewsRotator() {
 }
 
 /* ---------------------------------------------------------------------
-   3c) Events Calendar — minimal list: time, event, flag, importance.
-   No forecast/actual/prior, no oversized icons — see KNOWN_EVENTS above.
+   3c) Events Calendar — ForexFactory (FX) + CryptoCraft (crypto) merged.
+   Only Medium/High impact, only USD/EUR/GBP on the FX side. Renders
+   time, event name, currency flag, and two independent emoji-star
+   ratings — no forecast/actual/prior, no oversized site icons.
    --------------------------------------------------------------------- */
 function relativeDayDe(date) {
   const now = new Date();
@@ -360,14 +396,112 @@ function relativeDayDe(date) {
   return "in " + diffDays + " Tagen";
 }
 
+function normalizeEventTitle(title) {
+  return title.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function fetchForexFactoryEvents() {
+  const text = await fetchTextViaProxies(CALENDAR_CONFIG.ffUrl);
+  const raw = JSON.parse(text); // [{title,country,date,impact,forecast,previous}]
+  return raw
+    .filter((e) => CALENDAR_CONFIG.fxCountries.includes(e.country))
+    .filter((e) => e.impact === "Medium" || e.impact === "High")
+    .map((e) => ({
+      key: normalizeEventTitle(e.title),
+      utc: new Date(e.date).getTime(), // ISO string already carries the correct UTC offset
+      name: e.title,
+      country: e.country,
+      fx: IMPACT_STARS[e.impact] || 0
+    }))
+    .filter((e) => Number.isFinite(e.utc));
+}
+
+function parseCcDateTimeToUtc(dateStr, timeStr) {
+  // dateStr: "MM-DD-YYYY", timeStr: "H:MMam"/"H:MMpm" — both already UTC
+  // (verified against the ForexFactory feed's explicit-offset times).
+  const [mm, dd, yyyy] = dateStr.split("-").map(Number);
+  const match = /^(\d{1,2}):(\d{2})(am|pm)$/i.exec((timeStr || "").trim());
+  if (!mm || !dd || !yyyy || !match) return null;
+  let hour = parseInt(match[1], 10) % 12;
+  if (match[3].toLowerCase() === "pm") hour += 12;
+  const minute = parseInt(match[2], 10);
+  return Date.UTC(yyyy, mm - 1, dd, hour, minute);
+}
+
+async function fetchCryptoCraftEvents() {
+  const text = await fetchTextViaProxies(CALENDAR_CONFIG.ccUrl);
+  const doc = new DOMParser().parseFromString(text, "text/xml");
+  if (doc.querySelector("parsererror")) return [];
+  return Array.from(doc.querySelectorAll("event")).map((ev) => {
+    const title = ev.querySelector("title")?.textContent || "";
+    const country = ev.querySelector("country")?.textContent || "";
+    const dateStr = ev.querySelector("date")?.textContent || "";
+    const timeStr = ev.querySelector("time")?.textContent || "";
+    const impact = ev.querySelector("impact")?.textContent || "";
+    const utc = parseCcDateTimeToUtc(dateStr, timeStr);
+    return { key: normalizeEventTitle(title), utc, name: title, country, crypto: IMPACT_STARS[impact] || 0 };
+  }).filter((e) => e.utc !== null);
+}
+
+async function refreshEventsCalendar() {
+  try {
+    const [ffResult, ccResult] = await Promise.allSettled([fetchForexFactoryEvents(), fetchCryptoCraftEvents()]);
+    const ffEvents = ffResult.status === "fulfilled" ? ffResult.value : [];
+    const ccEvents = ccResult.status === "fulfilled" ? ccResult.value : [];
+
+    if (ffEvents.length === 0 && ccEvents.length === 0) {
+      throw new Error("Beide Kalender-Feeds nicht erreichbar");
+    }
+
+    // Match by normalized title + same UTC calendar day.
+    const dayKey = (utc) => new Date(utc).toISOString().slice(0, 10);
+    const ccByKey = new Map();
+    for (const ev of ccEvents) ccByKey.set(ev.key + "|" + dayKey(ev.utc), ev);
+
+    const merged = [];
+    const usedCcKeys = new Set();
+    for (const ff of ffEvents) {
+      const k = ff.key + "|" + dayKey(ff.utc);
+      const cc = ccByKey.get(k);
+      if (cc) usedCcKeys.add(k);
+      merged.push({
+        utc: ff.utc,
+        name: ff.name,
+        country: ff.country,
+        fx: ff.fx,
+        crypto: cc ? cc.crypto : 0
+      });
+    }
+    // CryptoCraft-only events (crypto-native, e.g. ETF decisions) that
+    // never appeared on the FX side at all.
+    for (const cc of ccEvents) {
+      const k = cc.key + "|" + dayKey(cc.utc);
+      if (usedCcKeys.has(k)) continue;
+      if (cc.crypto >= 2) {
+        merged.push({ utc: cc.utc, name: cc.name, country: cc.country, fx: 0, crypto: cc.crypto });
+      }
+    }
+
+    eventsState.items = merged.filter((e) => e.fx >= 2 || e.crypto >= 2);
+    eventsState.usingFallback = false;
+  } catch (err) {
+    console.warn("Events-Kalender: Live-Feeds nicht verfügbar, nutze Fallback-Liste.", err.message);
+    eventsState.items = FALLBACK_EVENTS;
+    eventsState.usingFallback = true;
+  }
+  renderEventsCalendar();
+}
+
+const eventsState = { items: [], usingFallback: false };
+
 function renderEventsCalendar() {
   const listEl = document.getElementById("eventsList");
   if (!listEl) return;
   const now = Date.now();
-  const upcoming = KNOWN_EVENTS
+  const upcoming = eventsState.items
     .filter((ev) => ev.utc > now)
     .sort((a, b) => a.utc - b.utc)
-    .slice(0, 8);
+    .slice(0, CALENDAR_CONFIG.maxRows);
 
   if (upcoming.length === 0) {
     listEl.innerHTML = '<div class="event-empty">Keine bevorstehenden Termine in der Liste.</div>';
@@ -378,8 +512,9 @@ function renderEventsCalendar() {
     const d = new Date(ev.utc);
     const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     const day = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-    const stars = "★".repeat(ev.importance) + "☆".repeat(3 - ev.importance);
     const flag = EVENT_FLAGS[ev.country] || "";
+    const fxEmoji = ev.fx > 0 ? "💵".repeat(ev.fx) : "";
+    const cryptoEmoji = ev.crypto > 0 ? "₿".repeat(ev.crypto) : "";
     return `
       <div class="event-row">
         <div class="event-when">
@@ -388,7 +523,10 @@ function renderEventsCalendar() {
         </div>
         <span class="event-flag">${flag}</span>
         <span class="event-name">${ev.name}</span>
-        <span class="event-stars">${stars}</span>
+        <span class="event-impact">
+          <span class="event-fx">${fxEmoji}</span>
+          <span class="event-crypto">${cryptoEmoji}</span>
+        </span>
       </div>`;
   }).join("");
 }
@@ -486,8 +624,9 @@ async function refreshMarketAwareness() {
 function boot() {
   initWidgets();
   initNewsRotator();
-  renderEventsCalendar();
-  setInterval(renderEventsCalendar, 5 * 60 * 1000);
+  refreshEventsCalendar();
+  setInterval(refreshEventsCalendar, CALENDAR_CONFIG.refetchMs);
+  setInterval(renderEventsCalendar, 5 * 60 * 1000); // keep "heute/morgen" labels fresh between refetches
 
   updateClock();
   setInterval(updateClock, 1000);
