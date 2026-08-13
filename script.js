@@ -91,7 +91,7 @@ function initWidgets() {
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
-    studies: ["MAExp@tv-basicstudies"],
+    studies: ["Moving Average Exponential"],
     studies_overrides: {
       "moving average exponential.length": CONFIG.emaLength,
       "moving average exponential.plot.color": CONFIG.emaColor,
@@ -117,7 +117,7 @@ function initWidgets() {
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
-    studies: ["MAExp@tv-basicstudies"],
+    studies: ["Moving Average Exponential"],
     studies_overrides: {
       "moving average exponential.length": CONFIG.emaLength,
       "moving average exponential.plot.color": CONFIG.emaColor,
@@ -140,24 +140,18 @@ function initWidgets() {
     locale: "de_DE"
   });
 
-  // News (TradingView "Top Stories") — "compact" is the dense text-list
-  // mode (no big preview cards), so far more headlines fit in the panel.
-  embedTVWidget("tv_news", "https://s3.tradingview.com/external-embedding/embed-widget-timeline.js", {
-    feedMode: "all_symbols",
-    isTransparent: true,
-    displayMode: "compact",
-    width: "100%",
-    height: "100%",
-    colorTheme: "dark",
-    locale: "de_DE"
-  });
+  // News: handled separately by the custom headline rotator (see
+  // initNewsRotator below) — not a TradingView widget, see explanation there.
 
-  // Economic calendar
+  // Economic calendar — "compact" shrinks the country-flag icons and
+  // condenses the row layout (documented TradingView behavior for this
+  // widget), which is what was taking up too much space.
   embedTVWidget("tv_calendar", "https://s3.tradingview.com/external-embedding/embed-widget-events.js", {
     width: "100%",
     height: "100%",
     colorTheme: "dark",
     isTransparent: true,
+    displayMode: "compact",
     locale: "de_DE",
     importanceFilter: CONFIG.calendarImportance,
     countryFilter: CONFIG.calendarCountries
@@ -177,6 +171,130 @@ function updateClock() {
   if (dateEl) {
     dateEl.textContent = now.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
   }
+}
+
+/* ---------------------------------------------------------------------
+   3b) News Rotator — one full headline at a time, no TradingView widget
+   ---------------------------------------------------------------------
+   Why this exists: TradingView's News widget runs inside a cross-origin
+   iframe, so we cannot read its headlines, resize its internal "Top
+   Stories" header, or control its rotation from our own JS — that's a
+   hard browser security boundary, not a setting we missed. To get an
+   actual "one full headline for 15s, then the next" ticker with real
+   data, we instead pull two CNBC RSS feeds directly (Markets + Investing)
+   through a free, keyless CORS proxy (api.allorigins.win) and rotate
+   through them ourselves.
+   Trade-off to know about: api.allorigins.win is a free third-party
+   proxy, not something TradingView or CNBC guarantees — if it's ever
+   down, the panel shows a short "nicht verfügbar" message instead of
+   breaking the page, and retries on the next refresh cycle.
+   --------------------------------------------------------------------- */
+const NEWS_CONFIG = {
+  feeds: [
+    "https://www.cnbc.com/id/15838459/device/rss/rss.html", // CNBC Markets
+    "https://www.cnbc.com/id/19794221/device/rss/rss.html"  // CNBC Investing
+  ],
+  corsProxy: "https://api.allorigins.win/raw?url=",
+  rotateMs: 15 * 1000,      // one full headline visible for 15s
+  refetchMs: 10 * 60 * 1000, // pull fresh headlines every 10 min
+  maxItems: 25
+};
+
+const newsState = {
+  items: [],      // { title, pubDate, source }
+  index: 0
+};
+
+function parseRssItems(xmlText, fallbackSource) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  if (doc.querySelector("parsererror")) return [];
+  return Array.from(doc.querySelectorAll("item")).map((item) => {
+    const title = (item.querySelector("title")?.textContent || "").trim();
+    const pubDateRaw = item.querySelector("pubDate")?.textContent || "";
+    const sourceEl = item.querySelector("source");
+    const source = (sourceEl?.textContent || fallbackSource || "").trim();
+    const pubDate = pubDateRaw ? new Date(pubDateRaw) : null;
+    return { title, pubDate, source };
+  }).filter((it) => it.title);
+}
+
+async function fetchNewsFeed(url) {
+  const res = await fetch(NEWS_CONFIG.corsProxy + encodeURIComponent(url));
+  if (!res.ok) throw new Error("News-Feed HTTP " + res.status);
+  const text = await res.text();
+  return parseRssItems(text, "CNBC");
+}
+
+async function refreshNewsFeeds() {
+  try {
+    const results = await Promise.allSettled(NEWS_CONFIG.feeds.map(fetchNewsFeed));
+    const merged = [];
+    const seenTitles = new Set();
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      for (const item of r.value) {
+        if (seenTitles.has(item.title)) continue;
+        seenTitles.add(item.title);
+        merged.push(item);
+      }
+    }
+    if (merged.length === 0) {
+      // Every feed failed (proxy down, network, etc.) — keep any
+      // previously loaded items so the rotation doesn't go blank.
+      if (newsState.items.length === 0) renderNewsUnavailable();
+      return;
+    }
+    merged.sort((a, b) => (b.pubDate?.getTime() || 0) - (a.pubDate?.getTime() || 0));
+    newsState.items = merged.slice(0, NEWS_CONFIG.maxItems);
+    if (newsState.index >= newsState.items.length) newsState.index = 0;
+    renderCurrentHeadline();
+  } catch (err) {
+    if (newsState.items.length === 0) renderNewsUnavailable();
+    console.warn("News-Feeds aktuell nicht verfügbar:", err.message);
+  }
+}
+
+function relativeTimeDe(date) {
+  if (!date) return "";
+  const diffMin = Math.round((Date.now() - date.getTime()) / 60000);
+  if (diffMin < 1) return "gerade eben";
+  if (diffMin < 60) return "vor " + diffMin + " Min";
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return "vor " + diffH + " Std";
+  const diffD = Math.round(diffH / 24);
+  return "vor " + diffD + " Tag" + (diffD > 1 ? "en" : "");
+}
+
+function renderCurrentHeadline() {
+  const headlineEl = document.getElementById("newsHeadline");
+  const timeEl = document.getElementById("newsTime");
+  const sourceEl = document.getElementById("newsSource");
+  if (!headlineEl || newsState.items.length === 0) return;
+  const item = newsState.items[newsState.index];
+  headlineEl.textContent = item.title;
+  if (timeEl) timeEl.textContent = relativeTimeDe(item.pubDate);
+  if (sourceEl) sourceEl.textContent = item.source || "";
+}
+
+function renderNewsUnavailable() {
+  const headlineEl = document.getElementById("newsHeadline");
+  const timeEl = document.getElementById("newsTime");
+  const sourceEl = document.getElementById("newsSource");
+  if (headlineEl) headlineEl.textContent = "News aktuell nicht verfügbar — nächster Versuch in Kürze.";
+  if (timeEl) timeEl.textContent = "";
+  if (sourceEl) sourceEl.textContent = "";
+}
+
+function advanceHeadline() {
+  if (newsState.items.length === 0) return;
+  newsState.index = (newsState.index + 1) % newsState.items.length;
+  renderCurrentHeadline();
+}
+
+function initNewsRotator() {
+  refreshNewsFeeds();
+  setInterval(advanceHeadline, NEWS_CONFIG.rotateMs);
+  setInterval(refreshNewsFeeds, NEWS_CONFIG.refetchMs);
 }
 
 /* ---------------------------------------------------------------------
@@ -271,6 +389,7 @@ async function refreshMarketAwareness() {
    --------------------------------------------------------------------- */
 function boot() {
   initWidgets();
+  initNewsRotator();
 
   updateClock();
   setInterval(updateClock, 1000);

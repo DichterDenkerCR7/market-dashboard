@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -56,12 +56,15 @@
     </div>
   </section>
 
-  <!-- ============ NEWS ============ -->
+  <!-- ============ NEWS (custom rotating headline) ============ -->
   <section class="panel news-panel">
     <div class="panel-title"><span class="panel-eyebrow">03</span> NEWS</div>
-    <div class="tv-wrap">
-      <div class="tradingview-widget-container" id="tv_news" style="height:100%;width:100%">
-        <div class="tradingview-widget-container__widget"></div>
+    <div class="news-ticker">
+      <div class="news-headline" id="newsHeadline">Lade Nachrichten…</div>
+      <div class="news-meta">
+        <span id="newsTime"></span>
+        <span class="news-meta-sep">·</span>
+        <span id="newsSource"></span>
       </div>
     </div>
   </section>
@@ -78,6 +81,6 @@
 
 </div>
 
-<script src="script.js?v=5"></script>
+<script src="script.js?v=6"></script>
 </body>
 </html>
