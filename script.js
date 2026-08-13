@@ -9,11 +9,11 @@
    --------------------------------------------------------------------- */
 const CONFIG = {
   // Big charts (TradingView "Advanced Chart" symbols)
-  chartBtc: "BITSTAMP:BTCUSD",
+  chartBtc: "BINANCE:BTCUSDT",
   // NASDAQ:NDX needs a paid NASDAQ real-time data license and stays blank
-  // in free widgets. CME_MINI:NQ1! (Nasdaq-100 e-mini future) is license-free
-  // and trades almost 24h — better fit for an always-on awareness board anyway.
-  chartNdx: "CME_MINI:NQ1!",
+  // in free widgets. FX:NAS100 (FXCM "US 100 Cash CFD") is license-free,
+  // trades near round-the-clock and is the symbol requested by the user.
+  chartNdx: "FX:NAS100",
   chartInterval: "60", // 60 = 1H candles
 
   // Compact overview strip (TradingView "Ticker Tape" symbols)
