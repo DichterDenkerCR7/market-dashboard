@@ -10,18 +10,25 @@
 const CONFIG = {
   // Big charts (TradingView "Advanced Chart" symbols)
   chartBtc: "BITSTAMP:BTCUSD",
-  chartNdx: "NASDAQ:NDX",
+  // NASDAQ:NDX needs a paid NASDAQ real-time data license and stays blank
+  // in free widgets. CME_MINI:NQ1! (Nasdaq-100 e-mini future) is license-free
+  // and trades almost 24h — better fit for an always-on awareness board anyway.
+  chartNdx: "CME_MINI:NQ1!",
   chartInterval: "60", // 60 = 1H candles
 
   // Compact overview strip (TradingView "Ticker Tape" symbols)
+  // NOTE: TVC:VIX / TVC:US10Y can fail to render (licensed Refinitiv/Cboe
+  // feed). FRED:VIXCLS / FRED:DGS10 are official, fully free Fed data —
+  // updates once daily instead of tick-by-tick, which is fine for a
+  // glance-level context strip.
   tickerSymbols: [
     { proName: "FOREXCOM:SPXUSD", title: "S&P 500" },
     { proName: "FOREXCOM:NSXUSD", title: "NASDAQ 100" },
     { proName: "TVC:GOLD",        title: "GOLD" },
     { proName: "BITSTAMP:BTCUSD", title: "BITCOIN" },
     { proName: "FX:EURUSD",       title: "EUR/USD" },
-    { proName: "TVC:US10Y",       title: "US 10Y" },
-    { proName: "TVC:VIX",         title: "VIX" }
+    { proName: "FRED:DGS10",      title: "US 10Y" },
+    { proName: "FRED:VIXCLS",     title: "VIX" }
   ],
 
   // Economic calendar filter: "-1,0,1" = low+med+high, "0,1" = med+high only
@@ -146,7 +153,13 @@ function updateClock() {
    --------------------------------------------------------------------- */
 const marketState = {
   btcChangePct: null,
-  ndxChangePct: null, // stays null if the Yahoo best-effort call is blocked
+  // Nasdaq live % is intentionally NOT fetched here: every free, keyless,
+  // CORS-enabled equity API we could use (Yahoo Finance et al.) blocks
+  // browser-side requests. Rather than call it and hide the console error,
+  // we skip it entirely — the Nasdaq ticker-tape item and the big NQ1!
+  // chart already give a live visual read. Per Abschnitt 5: vereinfachen
+  // statt eine unzuverlässige Kennzahl vortäuschen.
+  ndxChangePct: null,
   lastUpdate: null
 };
 
@@ -164,25 +177,6 @@ async function fetchBtcChange() {
   } catch (err) {
     marketState.btcChangePct = null;
     console.warn("BTC-Daten aktuell nicht verfügbar:", err.message);
-  }
-}
-
-async function fetchNdxChange() {
-  // Best-effort only: Yahoo Finance has no official CORS support, so this
-  // is allowed to fail silently. If it fails, awareness logic simply
-  // falls back to BTC-only (see computeStatus()) — by design (Abschnitt 5).
-  try {
-    const res = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/QQQ?interval=1d&range=1d");
-    if (!res.ok) throw new Error("Yahoo HTTP " + res.status);
-    const data = await res.json();
-    const meta = data && data.chart && data.chart.result && data.chart.result[0] && data.chart.result[0].meta;
-    if (meta && typeof meta.regularMarketPrice === "number" && typeof meta.previousClose === "number" && meta.previousClose !== 0) {
-      marketState.ndxChangePct = ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100;
-    } else {
-      marketState.ndxChangePct = null;
-    }
-  } catch (err) {
-    marketState.ndxChangePct = null; // stays "vereinfacht" — no error shown to the user
   }
 }
 
@@ -240,17 +234,9 @@ function renderStatus() {
     ctxBtc.className = "ctx-value " + (marketState.btcChangePct > 0 ? "up" : marketState.btcChangePct < 0 ? "down" : "");
   }
 
-  const ctxNdx = document.getElementById("ctxNdx");
-  if (ctxNdx) {
-    ctxNdx.textContent = fmtPct(marketState.ndxChangePct);
-    ctxNdx.className = "ctx-value " + (marketState.ndxChangePct > 0 ? "up" : marketState.ndxChangePct < 0 ? "down" : "");
-  }
-
   const ctxNote = document.getElementById("ctxNote");
-  if (ctxNote && marketState.ndxChangePct === null) {
-    ctxNote.textContent = "Vereinfachter Modus: NASDAQ-Livedaten aktuell nicht erreichbar — Status basiert auf BTC. Events siehe Kalender rechts.";
-  } else if (ctxNote) {
-    ctxNote.textContent = "Quelle: CoinGecko · Yahoo Finance (Best-Effort, ohne Key)";
+  if (ctxNote) {
+    ctxNote.textContent = "Status basiert auf BTC 24h (CoinGecko, ohne Key) · NASDAQ-Bewegung: siehe Chart/Ticker oben";
   }
 
   const ctxUpdated = document.getElementById("ctxUpdated");
@@ -262,7 +248,7 @@ function renderStatus() {
 }
 
 async function refreshMarketAwareness() {
-  await Promise.all([fetchBtcChange(), fetchNdxChange()]);
+  await fetchBtcChange();
   marketState.lastUpdate = new Date();
   renderStatus();
 }
