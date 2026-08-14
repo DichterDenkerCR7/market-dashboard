@@ -226,6 +226,14 @@ const CORS_PROXIES = [
 ];
 
 async function fetchTextViaProxies(url) {
+  // Cache-bust: proxies (and sometimes the browser) were caching FairEconomy's
+  // calendar files, so we kept getting back the exact same stale snapshot
+  // day after day — every event in it eventually looked "in the past" no
+  // matter when you loaded the page. Appending a unique, ever-changing
+  // query param makes each request look like a brand-new URL, which
+  // defeats that caching.
+  const bustedUrl = url + (url.includes("?") ? "&" : "?") + "cb=" + Date.now();
+
   // Try a direct, proxy-free request first. Public "weekly export" data
   // files like FairEconomy's are often served with open CORS headers
   // specifically so third-party tools can read them directly — and a
@@ -233,7 +241,7 @@ async function fetchTextViaProxies(url) {
   // is known to actively block requests coming from VPS/cloud IP ranges
   // via Cloudflare, which is exactly what public CORS proxies run on.
   try {
-    const res = await fetch(url);
+    const res = await fetch(bustedUrl, { cache: "no-store" });
     if (res.ok) {
       const text = await res.text();
       if (looksLikeRealData(text)) return text;
@@ -245,7 +253,7 @@ async function fetchTextViaProxies(url) {
   let lastError = null;
   for (const buildProxyUrl of CORS_PROXIES) {
     try {
-      const res = await fetch(buildProxyUrl(url));
+      const res = await fetch(buildProxyUrl(bustedUrl));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const text = await res.text();
       if (!looksLikeRealData(text)) throw new Error("Antwort sieht nicht nach Daten aus (evtl. Cloudflare-Block)");
