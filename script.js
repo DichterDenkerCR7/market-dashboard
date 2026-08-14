@@ -524,58 +524,52 @@ async function fetchCryptoCraftEvents() {
 }
 
 async function refreshEventsCalendar() {
+  // Base layer: the hand-curated FOMC/ECB/CPI/NFP dates always go in
+  // first, so the list is never empty even if every live feed fails —
+  // which, across repeated real-world tests, they did (ForexFactory
+  // blocked on all 3 proxies, CryptoCraft's remaining "this week" high-
+  // impact items had already passed). Live data is layered on top as an
+  // enrichment (real per-site fx/crypto ratings, plus any extra events
+  // the static list doesn't cover) whenever it's actually reachable.
+  const byKey = new Map();
+  const dayKey = (utc) => new Date(utc).toISOString().slice(0, 10);
+  for (const ev of FALLBACK_EVENTS) {
+    byKey.set(normalizeEventTitle(ev.name) + "|" + dayKey(ev.utc), { ...ev });
+  }
+
   try {
     const [ffResult, ccResult] = await Promise.allSettled([fetchForexFactoryEvents(), fetchCryptoCraftEvents()]);
     const ffEvents = ffResult.status === "fulfilled" ? ffResult.value : [];
     const ccEvents = ccResult.status === "fulfilled" ? ccResult.value : [];
+    console.info("Events: FF=" + ffEvents.length + " CC=" + ccEvents.length + " Rohtreffer (live)");
 
-    if (ffEvents.length === 0 && ccEvents.length === 0) {
-      throw new Error("Beide Kalender-Feeds nicht erreichbar");
-    }
-    console.info("Events: FF=" + ffEvents.length + " CC=" + ccEvents.length + " Rohtreffer");
-
-    // Match by normalized title + same UTC calendar day.
-    const dayKey = (utc) => new Date(utc).toISOString().slice(0, 10);
     const ccByKey = new Map();
     for (const ev of ccEvents) ccByKey.set(ev.key + "|" + dayKey(ev.utc), ev);
-
-    const merged = [];
     const usedCcKeys = new Set();
+
     for (const ff of ffEvents) {
       const k = ff.key + "|" + dayKey(ff.utc);
       const cc = ccByKey.get(k);
       if (cc) usedCcKeys.add(k);
-      merged.push({
-        utc: ff.utc,
-        name: ff.name,
-        country: ff.country,
-        fx: ff.fx,
-        crypto: cc ? cc.crypto : 0
-      });
+      byKey.set(k, { utc: ff.utc, name: ff.name, country: ff.country, fx: ff.fx, crypto: cc ? cc.crypto : 0 });
     }
-    // CryptoCraft-only events (crypto-native, e.g. ETF decisions) that
-    // never appeared on the FX side at all.
     for (const cc of ccEvents) {
       const k = cc.key + "|" + dayKey(cc.utc);
-      if (usedCcKeys.has(k)) continue;
-      if (cc.crypto >= 2) {
-        merged.push({ utc: cc.utc, name: cc.name, country: cc.country, fx: 0, crypto: cc.crypto });
-      }
+      if (usedCcKeys.has(k) || cc.crypto < 2) continue;
+      const existing = byKey.get(k);
+      byKey.set(k, existing ? { ...existing, crypto: cc.crypto } : { utc: cc.utc, name: cc.name, country: cc.country, fx: 0, crypto: cc.crypto });
     }
-
-    eventsState.items = merged.filter((e) => e.fx >= 2 || e.crypto >= 2);
-    eventsState.usingFallback = false;
-    console.info("Events: " + eventsState.items.length + " nach Filter, " +
-      eventsState.items.filter((e) => e.utc > Date.now()).length + " davon in der Zukunft");
   } catch (err) {
-    console.warn("Events-Kalender: Live-Feeds nicht verfügbar, nutze Fallback-Liste.", err.message);
-    eventsState.items = FALLBACK_EVENTS;
-    eventsState.usingFallback = true;
+    console.warn("Events: Live-Feeds nicht verfügbar, zeige nur die statische Liste.", err.message);
   }
+
+  eventsState.items = Array.from(byKey.values()).filter((e) => e.fx >= 2 || e.crypto >= 2);
+  console.info("Events: " + eventsState.items.length + " gesamt nach Merge+Filter, " +
+    eventsState.items.filter((e) => e.utc > Date.now()).length + " davon in der Zukunft");
   renderEventsCalendar();
 }
 
-const eventsState = { items: [], usingFallback: false };
+const eventsState = { items: [] };
 
 function renderEventsCalendar() {
   const listEl = document.getElementById("eventsList");
@@ -587,10 +581,7 @@ function renderEventsCalendar() {
     .slice(0, CALENDAR_CONFIG.maxRows);
 
   if (upcoming.length === 0) {
-    const hint = eventsState.usingFallback
-      ? "Keine bevorstehenden Termine in der Fallback-Liste."
-      : "Keine passenden Termine gefunden — evtl. Feed-Limit erreicht, nächster Versuch automatisch.";
-    listEl.innerHTML = '<div class="event-empty">' + hint + '</div>';
+    listEl.innerHTML = '<div class="event-empty">Keine bevorstehenden Termine in der Liste.</div>';
     return;
   }
 
