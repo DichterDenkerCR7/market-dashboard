@@ -109,6 +109,41 @@ const FALLBACK_EVENTS = [
   { utc: Date.UTC(2026, 11, 17, 13, 15),name: "EZB Zinsentscheid",            country: "EUR", fx: 3, crypto: 1 }
 ];
 
+// US Initial Jobless Claims: released every Thursday at 8:30am ET,
+// Medium impact, essentially without exception (holiday weeks just shift
+// a day, which we don't bother modeling here). Unlike FOMC/CPI/NFP this
+// doesn't need hand-researched dates — "every Thursday" is the rule —
+// so we generate the next several occurrences instead of hardcoding
+// them. This is what closes the gap between the sparse big-ticket
+// FALLBACK_EVENTS entries and what you'd actually see checking FF/CC
+// manually this week.
+function generateWeeklyJoblessClaims(weeksAhead) {
+  const events = [];
+  const now = new Date();
+  // Walk forward day-by-day to the next Thursday (UTC weekday 4), then
+  // step in 7-day jumps. US DST 2026: EDT (UTC-4) Mar 8 – Nov 1, else EST (UTC-5).
+  const cursor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  while (cursor.getUTCDay() !== 4) cursor.setUTCDate(cursor.getUTCDate() + 1);
+
+  const dstStart = Date.UTC(2026, 2, 8);   // Mar 8, 2026
+  const dstEnd = Date.UTC(2026, 10, 1);    // Nov 1, 2026
+
+  for (let i = 0; i < weeksAhead; i++) {
+    const dayUtc = Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate());
+    const isEdt = dayUtc >= dstStart && dayUtc < dstEnd;
+    const offsetHours = isEdt ? 4 : 5; // ET -> UTC
+    events.push({
+      utc: Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate(), 8 + offsetHours, 30),
+      name: "US Erstanträge Arbeitslosenhilfe",
+      country: "USD",
+      fx: 2,
+      crypto: 0
+    });
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
+  }
+  return events;
+}
+
 /* ---------------------------------------------------------------------
    2) TradingView widget embedding helper
    --------------------------------------------------------------------- */
@@ -533,7 +568,8 @@ async function refreshEventsCalendar() {
   // the static list doesn't cover) whenever it's actually reachable.
   const byKey = new Map();
   const dayKey = (utc) => new Date(utc).toISOString().slice(0, 10);
-  for (const ev of FALLBACK_EVENTS) {
+  const baseEvents = FALLBACK_EVENTS.concat(generateWeeklyJoblessClaims(8));
+  for (const ev of baseEvents) {
     byKey.set(normalizeEventTitle(ev.name) + "|" + dayKey(ev.utc), { ...ev });
   }
 
